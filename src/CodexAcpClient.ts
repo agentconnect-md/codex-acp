@@ -64,6 +64,10 @@ import {
     createUnavailableAgentFileChangeReport,
 } from "./AgentFileChangeReport";
 import {CodexSubagentSubscriptions} from "./subagents/CodexSubagentSubscriptions";
+import {
+    normalizeApprovalsReviewer,
+    type SelectableApprovalsReviewer,
+} from "./ApprovalsReviewerConfig";
 
 /**
  * Well-known provider id for the client-configurable custom LLM gateway.
@@ -481,6 +485,7 @@ export class CodexAcpClient {
             currentModelId: currentModelId,
             models: codexModels,
             collaborationMode: this.getCollaborationMode(response.thread.id),
+            approvalsReviewer: normalizeApprovalsReviewer(response.approvalsReviewer),
             modelProvider: response.modelProvider,
             currentServiceTier: response.serviceTier as ServiceTier ?? null,
             additionalDirectories,
@@ -509,6 +514,7 @@ export class CodexAcpClient {
             currentModelId: currentModelId,
             models: codexModels,
             collaborationMode: this.getCollaborationMode(response.thread.id),
+            approvalsReviewer: normalizeApprovalsReviewer(response.approvalsReviewer),
             modelProvider: response.modelProvider,
             currentServiceTier: response.serviceTier as ServiceTier ?? null,
             thread: historyResponse.thread,
@@ -543,6 +549,7 @@ export class CodexAcpClient {
             currentModelId: currentModelId,
             models: codexModels,
             collaborationMode: this.getCollaborationMode(response.thread.id),
+            approvalsReviewer: normalizeApprovalsReviewer(response.approvalsReviewer),
             modelProvider: response.modelProvider,
             currentServiceTier: response.serviceTier as ServiceTier ?? null,
             additionalDirectories,
@@ -848,6 +855,7 @@ export class CodexAcpClient {
     async sendPrompt(
         request: acp.PromptRequest,
         agentMode: AgentMode,
+        approvalsReviewer: SelectableApprovalsReviewer,
         modelId: ModelId,
         serviceTier: ServiceTier | null,
         disableSummary: boolean,
@@ -866,7 +874,7 @@ export class CodexAcpClient {
             threadId: request.sessionId,
             input: input,
             approvalPolicy: agentMode.approvalPolicy,
-            approvalsReviewer: agentMode.approvalsReviewer,
+            approvalsReviewer,
             sandboxPolicy: addAdditionalDirectoriesToSandboxPolicy(agentMode.sandboxPolicy, additionalDirectories),
             summary: disableSummary ? "none" : "auto",
             effort: effort,
@@ -1228,6 +1236,7 @@ export type SessionMetadata = {
     currentModelId: string,
     models: Model[],
     collaborationMode: ModeKind,
+    approvalsReviewer: SelectableApprovalsReviewer,
     modelProvider?: string | null,
     currentServiceTier?: ServiceTier | null,
     additionalDirectories: string[],

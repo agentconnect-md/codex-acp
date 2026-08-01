@@ -9,7 +9,7 @@ Use [OpenAI Codex](https://github.com/openai/codex) from [Agent Client Protocol]
 ## Features
 
 - ChatGPT, API key, and client-provided custom gateway authentication.
-- Model, reasoning effort, fast mode, approval, and sandbox mode configuration.
+- Model, reasoning effort, fast mode, approval reviewer, and approval/sandbox mode configuration.
 - Text prompts, embedded context, images, resource links, and additional workspace directories.
 - Shell command, file change, [permission request](docs/permission-extension.md), MCP tool call, terminal output, reasoning, plan, web search, image generation, image view, token usage, and review events.
 - [Native ACP subagent sessions](docs/subagent-sessions.md) (after capability negotiation) with separate child histories and root-routed permissions; a legacy tool-call fallback otherwise.
