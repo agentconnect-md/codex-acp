@@ -137,6 +137,7 @@ describe("CodexACPAgent - plan review", () => {
         expect(turnStart.mock.calls[1]![0]).toMatchObject({
             threadId: sessionId,
             input: [{type: "text", text: "Implement the approved plan."}],
+            approvalsReviewer: sessionState.approvalsReviewer,
         });
 
         const events = fixture.getAcpConnectionEvents([]);
