@@ -3128,6 +3128,7 @@ describe('ACP server test', { timeout: 40_000 }, () => {
                 currentModelId,
                 models: [model],
                 collaborationMode: "default",
+                approvalsReviewer: "user",
                 additionalDirectories: [],
             })
             .mockResolvedValueOnce({
@@ -3135,6 +3136,7 @@ describe('ACP server test', { timeout: 40_000 }, () => {
                 currentModelId,
                 models: [model],
                 collaborationMode: "default",
+                approvalsReviewer: "user",
                 additionalDirectories: [],
             });
         const logoutSpy = vi.spyOn(codexAcpClient, "logout").mockResolvedValue();
@@ -3194,6 +3196,7 @@ describe('ACP server test', { timeout: 40_000 }, () => {
             currentModelId,
             models: [model],
             collaborationMode: "default",
+            approvalsReviewer: "user",
             modelProvider: "openai",
             additionalDirectories: [],
         });
@@ -3247,6 +3250,7 @@ describe('ACP server test', { timeout: 40_000 }, () => {
             currentModelId,
             models: [model],
             collaborationMode: "default",
+            approvalsReviewer: "user",
             additionalDirectories: [],
         });
         const logoutSpy = vi.spyOn(codexAcpClient, "logout").mockResolvedValue();
