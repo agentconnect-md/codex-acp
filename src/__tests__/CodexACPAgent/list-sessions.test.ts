@@ -242,6 +242,7 @@ describe("CodexACPAgent - list sessions", () => {
                 isDefault: true,
             }],
             collaborationMode: "default",
+            approvalsReviewer: "user",
             currentServiceTier: null,
             additionalDirectories: ["/repo/extra"],
         });

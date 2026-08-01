@@ -100,6 +100,12 @@ import {
     AIR_SESSION_FAILURE_KEY,
     JETBRAINS_META_KEY,
 } from "./AirExtension";
+import {
+    APPROVALS_REVIEWER_CONFIG_ID,
+    createApprovalsReviewerConfigOption,
+    parseApprovalsReviewer,
+    type SelectableApprovalsReviewer,
+} from "./ApprovalsReviewerConfig";
 
 const IMPLEMENT_PLAN_OPTION_ID = "implement_plan";
 const REVISE_PLAN_OPTION_ID = "revise_plan";
@@ -111,6 +117,7 @@ export interface SessionState {
     supportedReasoningEfforts: Array<ReasoningEffortOption>,
     supportedInputModalities: Array<InputModality>,
     agentMode: AgentMode,
+    approvalsReviewer: SelectableApprovalsReviewer,
     collaborationMode: ModeKind,
     currentTurnId: string | null;
     lastTokenUsage: TokenCount | null;
@@ -560,6 +567,7 @@ export class CodexAcpServer {
             supportedReasoningEfforts: currentModel?.supportedReasoningEfforts ?? [],
             supportedInputModalities: currentModel?.inputModalities ?? ["text", "image"],
             agentMode: AgentMode.getInitialAgentMode(),
+            approvalsReviewer: sessionMetadata.approvalsReviewer,
             collaborationMode: sessionMetadata.collaborationMode,
             currentTurnId: null,
             lastTokenUsage: null,
@@ -882,6 +890,9 @@ export class CodexAcpServer {
             case MODE_CONFIG_ID:
                 this.applyModeChange(sessionState, this.stringConfigValue(params));
                 break;
+            case APPROVALS_REVIEWER_CONFIG_ID:
+                this.applyApprovalsReviewerChange(sessionState, this.stringConfigValue(params));
+                break;
             case COLLABORATION_MODE_CONFIG_ID:
                 await this.applyCollaborationModeChange(sessionState, this.stringConfigValue(params));
                 break;
@@ -921,6 +932,14 @@ export class CodexAcpServer {
             throw RequestError.invalidParams();
         }
         sessionState.agentMode = newMode;
+    }
+
+    private applyApprovalsReviewerChange(sessionState: SessionState, value: string): void {
+        const approvalsReviewer = parseApprovalsReviewer(value);
+        if (approvalsReviewer === null) {
+            throw RequestError.invalidParams();
+        }
+        sessionState.approvalsReviewer = approvalsReviewer;
     }
 
     private async applyCollaborationModeChange(sessionState: SessionState, value: string): Promise<void> {
@@ -1270,6 +1289,7 @@ export class CodexAcpServer {
         const currentModelId = ModelId.fromString(sessionState.currentModelId);
         const configOptions = [
             sessionState.agentMode.toConfigOption(),
+            createApprovalsReviewerConfigOption(sessionState.approvalsReviewer),
             createCollaborationModeConfigOption(sessionState.collaborationMode),
             createModelConfigOption(sessionState.availableModels, currentModelId.model),
         ];
@@ -1449,6 +1469,7 @@ export class CodexAcpServer {
             supportedReasoningEfforts: currentModel?.supportedReasoningEfforts ?? [],
             supportedInputModalities: currentModel?.inputModalities ?? ["text", "image"],
             agentMode: AgentMode.getInitialAgentMode(),
+            approvalsReviewer: sessionMetadata.approvalsReviewer,
             collaborationMode: sessionMetadata.collaborationMode,
             currentTurnId: null,
             lastTokenUsage: null,
@@ -2202,6 +2223,7 @@ export class CodexAcpServer {
                 () => this.codexAcpClient.sendPrompt(
                     effectiveParams,
                     agentMode,
+                    sessionState.approvalsReviewer,
                     modelId,
                     serviceTier,
                     disableSummary,
@@ -2292,6 +2314,7 @@ export class CodexAcpServer {
                         () => this.codexAcpClient.sendPrompt(
                             implementationRequest,
                             agentMode,
+                            sessionState.approvalsReviewer,
                             modelId,
                             serviceTier,
                             disableSummary,
