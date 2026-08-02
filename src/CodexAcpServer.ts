@@ -21,6 +21,7 @@ import {
 } from "./CodexAcpClient";
 import {CodexAppServerClient, type McpStartupResult} from "./CodexAppServerClient";
 import {type CodexConnection, startCodexConnection} from "./CodexJsonRpcConnection";
+import type {PermissionProfileConfig} from "./PermissionProfileConfig";
 import {type AcpClientConnection, ACPSessionConnection, type UpdateSessionEvent} from "./ACPSessionConnection";
 import type {InputModality, ReasoningEffort, ServerNotification} from "./app-server";
 import type {
@@ -260,6 +261,8 @@ export interface CodexProcessState {
     codexPath: string | undefined;
     config: JsonObject | undefined;
     modelProvider: string | undefined;
+    env: NodeJS.ProcessEnv;
+    permissionProfileConfig: PermissionProfileConfig | undefined;
     stderr: string;
     stderrProcess?: CodexConnection["process"];
 }
@@ -1137,13 +1140,18 @@ export class CodexAcpServer {
         clearTimeout(forceKill);
 
         state.stderr = "";
-        state.connection = startCodexConnection(state.codexPath);
+        state.connection = startCodexConnection(
+            state.codexPath,
+            state.env,
+            state.permissionProfileConfig?.configOverrides,
+        );
         this.captureStderr();
         this.observeCodexProcess();
         return new CodexAcpClient(
             new CodexAppServerClient(state.connection.connection),
             state.config,
             state.modelProvider,
+            state.permissionProfileConfig,
         );
     }
 
@@ -1329,7 +1337,7 @@ export class CodexAcpServer {
         const sessionState = this.sessions.get(_params.sessionId);
         if (!sessionState) throw new Error(`Session ${_params.sessionId} not found`);
 
-        this.applyModeChange(sessionState, _params.modeId);
+        await this.applyModeChange(sessionState, _params.modeId);
         return {};
     }
 
@@ -1354,7 +1362,7 @@ export class CodexAcpServer {
                 this.applyFastModeChange(sessionState, params);
                 break;
             case MODE_CONFIG_ID:
-                this.applyModeChange(sessionState, this.stringConfigValue(params));
+                await this.applyModeChange(sessionState, this.stringConfigValue(params));
                 break;
             case COLLABORATION_MODE_CONFIG_ID:
                 await this.applyCollaborationModeChange(sessionState, this.stringConfigValue(params));
@@ -1389,11 +1397,15 @@ export class CodexAcpServer {
         return params.value;
     }
 
-    private applyModeChange(sessionState: SessionState, value: string): void {
+    private async applyModeChange(sessionState: SessionState, value: string): Promise<void> {
         const newMode = AgentMode.find(value);
         if (!newMode) {
             throw RequestError.invalidParams();
         }
+        await this.codexAcpClient.setAgentMode(
+            sessionState.sessionId,
+            newMode,
+        );
         sessionState.agentMode = newMode;
     }
 

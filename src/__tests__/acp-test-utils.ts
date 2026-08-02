@@ -18,6 +18,16 @@ import {CodexSubagentEventRouter} from "../subagents/CodexSubagentEventRouter";
 import {CodexBackgroundTerminalTasks} from "../async-tasks/CodexBackgroundTerminalTasks";
 import {CodexSessionCompactions} from "../CodexSessionCompactions";
 import {AUTH_STATUS_UPDATE_METHOD} from "../AuthStatusMeta";
+import type {PermissionProfileConfig} from "../PermissionProfileConfig";
+
+export const TEST_PERMISSION_PROFILE_CONFIG: PermissionProfileConfig = {
+    configOverrides: ["permissions.external-agent.extends=\":workspace\""],
+    modeProfiles: {
+        "read-only": "external-read-only",
+        agent: "external-agent",
+        "agent-full-access": "external-full-access",
+    },
+};
 
 export type MethodCallEvent = { method: string; args: any[] };
 
@@ -91,6 +101,7 @@ export interface ConnectionConfig {
     getExitCode: () => number | null;
     acpConnection?: AcpConnectionConfig;
     codexProcessState?: CodexProcessState;
+    permissionProfileConfig?: PermissionProfileConfig;
 }
 
 export function createBaseTestFixture(config: ConnectionConfig): TestFixture {
@@ -103,7 +114,12 @@ export function createBaseTestFixture(config: ConnectionConfig): TestFixture {
     });
 
     const codexAppServerClient = new CodexAppServerClient(config.connection);
-    const codexAcpClient = new CodexAcpClient(codexAppServerClient);
+    const codexAcpClient = new CodexAcpClient(
+        codexAppServerClient,
+        undefined,
+        undefined,
+        config.permissionProfileConfig,
+    );
     const codexAcpAgent = new CodexAcpServer(
         acpConnection,
         codexAcpClient,
@@ -274,6 +290,7 @@ export interface CodexMockTestFixture extends TestFixture {
 export function createCodexMockTestFixture(
     restartCodexClient?: () => Promise<CodexAcpClient>,
     process?: CodexConnection["process"],
+    permissionProfileConfig?: PermissionProfileConfig,
 ): CodexMockTestFixture {
     let unhandledNotificationHandler: ((notification: any) => void) | null = null;
     const requestHandlers = new Map<string, (params: unknown) => Promise<unknown>>();
@@ -327,8 +344,11 @@ export function createCodexMockTestFixture(
             codexPath: undefined,
             config: undefined,
             modelProvider: undefined,
+            env: {},
+            permissionProfileConfig,
             stderr: "",
         }} : {}),
+        ...(permissionProfileConfig ? {permissionProfileConfig} : {}),
         acpConnection: {
             connection: acpConnection,
             events: acpConnectionEvents,
@@ -479,8 +499,11 @@ export async function awaitFirstAuthStatusPush(fixture: TestFixture): Promise<vo
     });
 }
 
-export function setupPromptTestSession(sessionOverrides?: Partial<SessionState>) {
-    const mockFixture = createCodexMockTestFixture();
+export function setupPromptTestSession(
+    sessionOverrides?: Partial<SessionState>,
+    permissionProfileConfig?: PermissionProfileConfig,
+) {
+    const mockFixture = createCodexMockTestFixture(undefined, undefined, permissionProfileConfig);
     const sessionState = createTestSessionState(sessionOverrides);
 
     vi.spyOn(mockFixture.getCodexAcpAgent(), "getSessionState").mockReturnValue(sessionState);
