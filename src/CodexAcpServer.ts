@@ -50,7 +50,7 @@ import {
     REASONING_EFFORT_CONFIG_ID,
 } from "./ModelConfigOption";
 import type {TokenCount} from "./TokenCount";
-import {toPromptUsage} from "./TokenCount";
+import {subtractTokenCounts, toPromptUsage} from "./TokenCount";
 import {CodexCommands, GOAL_CONTINUATION_PROMPT} from "./CodexCommands";
 import {SteeringQueue} from "./SteeringQueue";
 import type {QuotaMeta} from "./QuotaMeta";
@@ -2878,6 +2878,7 @@ export class CodexAcpServer {
         let agentFileChangeReportUnavailableReason: AgentFileChangeReportUnavailableReason = "providerError";
         let promptWasCancelled = false;
         let recoverableSessionFailure = sessionState.sessionFailure;
+        const promptStartTotalTokenUsage = sessionState.totalTokenUsage;
         sessionState.currentTurnId = null;
         const activePrompt = this.trackActivePrompt(params.sessionId);
         let pendingTurnStart: PendingTurnStart | null = null;
@@ -2905,7 +2906,7 @@ export class CodexAcpServer {
             promptWasCancelled = true;
             agentFileChangeReportTurnId = null;
             agentFileChangeReportUnavailableReason = "cancelled";
-            return this.cancelledPromptResponse(sessionState);
+            return this.cancelledPromptResponse(sessionState, promptStartTotalTokenUsage);
         };
 
         try {
@@ -3031,6 +3032,7 @@ export class CodexAcpServer {
                     sessionState,
                     eventHandler,
                     commandResult.turnCompleted?.turn.id ?? sessionState.currentTurnId,
+                    promptStartTotalTokenUsage,
                 );
                 if (terminalFailure) {
                     return terminalFailure;
@@ -3043,7 +3045,7 @@ export class CodexAcpServer {
                 await clearRecoveredSessionFailure(eventHandler);
                 return {
                     stopReason: "end_turn",
-                    usage: this.buildPromptUsage(sessionState.lastTokenUsage),
+                    usage: this.buildPromptUsage(sessionState, promptStartTotalTokenUsage),
                     _meta: this.buildQuotaMeta(sessionState),
                 };
             }
@@ -3144,6 +3146,7 @@ export class CodexAcpServer {
                 sessionState,
                 eventHandler,
                 turnCompleted.turn.id,
+                promptStartTotalTokenUsage,
             );
             if (terminalFailure) {
                 return terminalFailure;
@@ -3245,6 +3248,7 @@ export class CodexAcpServer {
                         sessionState,
                         eventHandler,
                         turnCompleted.turn.id,
+                        promptStartTotalTokenUsage,
                     );
                     if (implementationFailure) {
                         return implementationFailure;
@@ -3285,7 +3289,7 @@ export class CodexAcpServer {
 
             return {
                 stopReason: "end_turn",
-                usage: this.buildPromptUsage(sessionState.lastTokenUsage),
+                usage: this.buildPromptUsage(sessionState, promptStartTotalTokenUsage),
                 _meta: this.buildQuotaMeta(sessionState),
             };
         } catch (err) {
@@ -3309,6 +3313,7 @@ export class CodexAcpServer {
                     sessionState,
                     eventHandler,
                     sessionState.currentTurnId,
+                    promptStartTotalTokenUsage,
                     true,
                 );
                 if (failureResponse !== null) {
@@ -3387,10 +3392,13 @@ export class CodexAcpServer {
         }
     }
 
-    private cancelledPromptResponse(sessionState: SessionState): acp.PromptResponse {
+    private cancelledPromptResponse(
+        sessionState: SessionState,
+        promptStartTotalTokenUsage: TokenCount | null,
+    ): acp.PromptResponse {
         return {
             stopReason: "cancelled",
-            usage: this.buildPromptUsage(sessionState.lastTokenUsage),
+            usage: this.buildPromptUsage(sessionState, promptStartTotalTokenUsage),
             _meta: this.buildQuotaMeta(sessionState),
         };
     }
@@ -3399,6 +3407,7 @@ export class CodexAcpServer {
         sessionState: SessionState,
         eventHandler: CodexEventHandler,
         turnId: string | null,
+        promptStartTotalTokenUsage: TokenCount | null,
         allowUnattributed = false,
     ): acp.PromptResponse | null {
         const failureMeta = eventHandler.getTerminalSessionFailureMeta(turnId, allowUnattributed);
@@ -3407,7 +3416,7 @@ export class CodexAcpServer {
         }
         return {
             stopReason: "end_turn",
-            usage: this.buildPromptUsage(sessionState.lastTokenUsage),
+            usage: this.buildPromptUsage(sessionState, promptStartTotalTokenUsage),
             _meta: {
                 ...this.buildQuotaMeta(sessionState),
                 ...failureMeta,
@@ -3434,11 +3443,17 @@ export class CodexAcpServer {
         };
     }
 
-    private buildPromptUsage(lastTokenUsage: TokenCount | null): acp.Usage | null {
-        if (lastTokenUsage == null) {
+    private buildPromptUsage(
+        sessionState: SessionState,
+        promptStartTotalTokenUsage: TokenCount | null,
+    ): acp.Usage | null {
+        if (sessionState.lastTokenUsage == null || sessionState.totalTokenUsage == null) {
             return null;
         }
-        return toPromptUsage(lastTokenUsage);
+        const promptTokenUsage = promptStartTotalTokenUsage == null
+            ? sessionState.totalTokenUsage
+            : subtractTokenCounts(sessionState.totalTokenUsage, promptStartTotalTokenUsage);
+        return toPromptUsage(promptTokenUsage);
     }
 
     private async runWithProcessCheck<T>(operation: () => Promise<T>): Promise<T> {
