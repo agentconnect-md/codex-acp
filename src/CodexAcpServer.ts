@@ -2105,6 +2105,7 @@ export class CodexAcpServer {
                         () => this.codexAcpClient.sendPrompt(
                             implementationRequest,
                             agentMode,
+                            sessionState.approvalsReviewer,
                             modelId,
                             serviceTier,
                             disableSummary,
