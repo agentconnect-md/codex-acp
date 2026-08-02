@@ -14,6 +14,7 @@ import {runCodexCli} from "./CodexCli";
 import {prepareCodexHookConfig} from "./CodexHookConfig";
 import {createAcpAgentRouter} from "./AcpAgentRouter";
 import type {AcpClientConnection, AcpV2Connection} from "./ACPSessionConnection";
+import {PERMISSION_PROFILE_CONFIG_ENV, readPermissionProfileConfig} from "./PermissionProfileConfig";
 
 if (process.argv.includes("--version")) {
     console.log(`${packageJson.name} ${packageJson.version}`);
@@ -49,6 +50,13 @@ function startAcpServer() {
     const hookConfig = prepareCodexHookConfig(config);
     const parsedAuthRequest = authRequestString ? JSON.parse(authRequestString) : undefined;
     const defaultAuthRequest = parsedAuthRequest && isCodexAuthRequest(parsedAuthRequest) ? parsedAuthRequest : undefined;
+    const permissionProfileConfig = readPermissionProfileConfig();
+    const codexEnv = {...process.env};
+    delete codexEnv[PERMISSION_PROFILE_CONFIG_ENV];
+    const appServerStartupArgs = [
+        ...hookConfig.appServerStartupArgs,
+        ...(permissionProfileConfig?.configOverrides.flatMap(override => ["-c", override]) ?? []),
+    ];
 
     logger.log("Startup", {
         name: packageJson.name,
@@ -62,11 +70,13 @@ function startAcpServer() {
 
     const codexProcessState: CodexProcessState = {
         // The supervisor disposes the connection itself, after the last output of the process was read.
-        connection: startCodexConnection(codexPath, undefined, hookConfig.appServerStartupArgs, {disposeOnExit: false}),
+        connection: startCodexConnection(codexPath, codexEnv, appServerStartupArgs, {disposeOnExit: false}),
         codexPath,
         config: hookConfig.sessionConfig,
-        appServerStartupArgs: hookConfig.appServerStartupArgs,
+        appServerStartupArgs,
         modelProvider,
+        env: codexEnv,
+        permissionProfileConfig,
         stderr: "",
     };
     const supervisor = new CodexAppServerSupervisor(codexProcessState);
@@ -81,7 +91,7 @@ function startAcpServer() {
 
     function createAgent(connection: AcpClientConnection | AcpV2Connection): CodexAcpServer {
         const appServerClient = new CodexAppServerClient(codexProcessState.connection.connection);
-        const codexClient = new CodexAcpClient(appServerClient, hookConfig.sessionConfig, modelProvider);
+        const codexClient = new CodexAcpClient(appServerClient, hookConfig.sessionConfig, modelProvider, permissionProfileConfig);
         return new CodexAcpServer(
             connection,
             codexClient,
