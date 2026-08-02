@@ -38,23 +38,22 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false
       - run: npm ci
-      - run: npm run build
-      - name: Stage AgentConnect package
+      - name: Build AgentConnect package
         env:
           PACKAGE_VERSION: ${{ github.ref_name }}
         run: |
           package_version="${PACKAGE_VERSION#agentconnect-v}"
-          staging_dir="${RUNNER_TEMP}/agentconnect-codex-acp"
-          mkdir -p "$staging_dir"
-          tarball="$(npm pack --json | node -e "let input=''; process.stdin.on('data', chunk => input += chunk); process.stdin.on('end', () => process.stdout.write(JSON.parse(input)[0].filename))")"
-          tar -xzf "$tarball" --strip-components=1 -C "$staging_dir"
           npm pkg set \
             'name=@agentconnect.md/codex-acp' \
             "version=$package_version" \
             'repository.type=git' \
             'repository.url=git+https://github.com/agentconnect-md/codex-acp.git' \
             'homepage=https://github.com/agentconnect-md/codex-acp#readme' \
-            'bugs.url=https://github.com/agentconnect-md/codex-acp/issues' \
-            --prefix "$staging_dir"
-          npm pkg delete scripts.prepublishOnly --prefix "$staging_dir"
+            'bugs.url=https://github.com/agentconnect-md/codex-acp/issues'
+          npm pkg delete scripts.prepublishOnly
+          npm run build
+          staging_dir="${RUNNER_TEMP}/agentconnect-codex-acp"
+          mkdir -p "$staging_dir"
+          tarball="$(npm pack --json | node -e "let input=''; process.stdin.on('data', chunk => input += chunk); process.stdin.on('end', () => process.stdout.write(JSON.parse(input)[0].filename))")"
+          tar -xzf "$tarball" --strip-components=1 -C "$staging_dir"
           npm publish "$staging_dir" --access public --tag agentconnect
