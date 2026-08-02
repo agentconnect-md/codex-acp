@@ -17,6 +17,10 @@ import {
     SESSION_STEERING_METHOD,
 } from "./AcpExtensions";
 import {ASYNC_TASK_STOP_METHOD} from "./async-tasks/AsyncTaskExtension";
+import {
+    PERMISSION_PROFILE_CONFIG_ENV,
+    readPermissionProfileConfig,
+} from "./PermissionProfileConfig";
 
 const emptyExtensionParamsParser = z.preprocess(
     (params) => params ?? {},
@@ -83,6 +87,9 @@ function startAcpServer() {
     const config = configString ? JSON.parse(configString) : undefined;
     const parsedAuthRequest = authRequestString ? JSON.parse(authRequestString) : undefined;
     const defaultAuthRequest = parsedAuthRequest && isCodexAuthRequest(parsedAuthRequest) ? parsedAuthRequest : undefined;
+    const permissionProfileConfig = readPermissionProfileConfig();
+    const codexEnv = {...process.env};
+    delete codexEnv[PERMISSION_PROFILE_CONFIG_ENV];
 
     logger.log("Startup", {
         name: packageJson.name,
@@ -95,10 +102,16 @@ function startAcpServer() {
     });
 
     const codexProcessState: CodexProcessState = {
-        connection: startCodexConnection(codexPath),
+        connection: startCodexConnection(
+            codexPath,
+            codexEnv,
+            permissionProfileConfig?.configOverrides,
+        ),
         codexPath,
         config,
         modelProvider,
+        env: codexEnv,
+        permissionProfileConfig,
         stderr: "",
     };
 
@@ -117,7 +130,12 @@ function startAcpServer() {
 
     function createAgent(connection: acp.AgentContext): CodexAcpServer {
         const appServerClient = new CodexAppServerClient(codexProcessState.connection.connection);
-        const codexClient = new CodexAcpClient(appServerClient, config, modelProvider);
+        const codexClient = new CodexAcpClient(
+            appServerClient,
+            config,
+            modelProvider,
+            permissionProfileConfig,
+        );
         return new CodexAcpServer(
             connection,
             codexClient,
