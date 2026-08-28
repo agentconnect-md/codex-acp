@@ -975,12 +975,13 @@ describe('ACP server test', { timeout: 40_000 }, () => {
             turn: { id: "turn-id", items: [], status: "completed", error: null }
         } as any);
 
-        vi.spyOn(codexAcpAgent, "getSessionState").mockReturnValue(createTestSessionState({
+        const sessionState = createTestSessionState({
             sessionId: "session-id",
             cwd: "/workspace",
             additionalDirectories: ["/workspace/extra"],
             agentMode: AgentMode.Agent,
-        }));
+        });
+        vi.spyOn(codexAcpAgent, "getSessionState").mockReturnValue(sessionState);
 
         await codexAcpAgent.prompt({
             sessionId: "session-id",
@@ -998,7 +999,7 @@ describe('ACP server test', { timeout: 40_000 }, () => {
             type: "workspaceWrite",
             writableRoots: ["/workspace/extra"],
         });
-        expect(turnStartSpy.mock.calls[0]![0].approvalsReviewer).toBe("auto_review");
+        expect(turnStartSpy.mock.calls[0]![0].approvalsReviewer).toBe(sessionState.approvalsReviewer);
     });
 
     it('keeps the external profile sticky instead of sending a legacy turn sandbox policy', async () => {
