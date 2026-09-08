@@ -196,10 +196,11 @@ describe("PermissionLifecycleContext", () => {
         let httpServers: ReadonlySet<string> | undefined = new Set(["server"]);
         const request = vi.fn().mockResolvedValue({outcome: {outcome: "selected", optionId: "allow_once"}});
         const notify = vi.fn();
+        const cancellation = new AbortController();
         const prompt = new PermissionLifecycleContext(sessionState()).beginPrompt();
         const handler = new CodexElicitationHandler(
             {request, notify} as unknown as AcpClientConnection,
-            prompt, null, undefined, () => httpServers,
+            prompt, null, cancellation.signal, () => httpServers,
         );
         const approval = {
             threadId: "thread", turnId: "turn-1", serverName: "server", mode: "form" as const,
@@ -225,24 +226,9 @@ describe("PermissionLifecycleContext", () => {
         expect(request).toHaveBeenCalledTimes(1);
         httpServers = new Set(["server"]);
         expect(await handler.handleElicitation(approval)).toEqual({action: "accept", content: {}, _meta: null});
-        expect(request).toHaveBeenCalledTimes(1);
-    });
-
-    it("does not autoapprove a cancelled Full access request", async () => {
-        const cancellation = new AbortController();
         cancellation.abort();
-        const request = vi.fn();
-        const handler = new CodexElicitationHandler(
-            {request} as unknown as AcpClientConnection,
-            new PermissionLifecycleContext(sessionState()).beginPrompt(),
-            null, cancellation.signal, () => new Set(["server"]),
-        );
-        expect(await handler.handleElicitation({
-            threadId: "thread", turnId: "turn-1", serverName: "server", mode: "form",
-            _meta: {codex_approval_kind: "mcp_tool_call", persist: "session"},
-            message: "Allow?", requestedSchema: {type: "object", properties: {}},
-        })).toEqual({action: "cancel", content: null, _meta: null});
-        expect(request).not.toHaveBeenCalled();
+        expect(await handler.handleElicitation(approval)).toEqual({action: "cancel", content: null, _meta: null});
+        expect(request).toHaveBeenCalledTimes(1);
     });
 
     it("keeps Full access permission refusals without blocking ordinary questions", async () => {
