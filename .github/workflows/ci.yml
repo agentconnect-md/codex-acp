@@ -27,10 +27,21 @@ jobs:
         run: npm run typecheck
       - name: Run unit tests
         run: npm test
+      - name: Bundle binaries
+        run: npm run bundle:all
+
+  local-mcp:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - run: npm ci
       - name: Verify local Codex MCP approvals
         env:
           RUN_LOCAL_CODEX_TESTS: 'true'
           LOCAL_CODEX_BINARY: ${{ github.workspace }}/node_modules/.bin/codex
         run: npm exec -- vitest run src/__tests__/CodexACPAgent/e2e/acp-e2e-local-mcp-approval.test.ts --retry=0
-      - name: Bundle binaries
-        run: npm run bundle:all
