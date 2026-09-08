@@ -140,27 +140,15 @@ export class CodexElicitationHandler implements ElicitationHandler {
     private readonly permissionContext: PermissionPromptContext;
     private readonly clientCapabilities: acp.ClientCapabilities | null;
     private readonly cancellationSignal: AbortSignal | undefined;
-    // In Rust, the MCP elicitation handler receives ElicitationRequestEvent directly from the MCP
-    // protocol layer, where id is set to "mcp_tool_call_approval_<call_id>" — the call ID is extracted
-    // by stripping that prefix.
-    //
-    // In TypeScript, Codex speaks the app-server JSON-RPC protocol (v2), where
-    // McpServerElicitationRequestParams omits elicitationId for form mode, so the MCP-level ID never
-    // reaches the client.
-    //
-    // Workaround: before requesting approval, Codex emits an item/started notification with an
-    // mcpToolCall item carrying the call id and server name. The shared permission lifecycle stores
-    // (threadId, serverName) → callId so this request can correlate to the rendered tool call item.
-    //
-    // The app-server handler exposes URL elicitationId, while serverRequest/resolved only exposes
-    // threadId here, so accepted URL elicitations are completed at thread scope.
+    // App-server omits form elicitation IDs, so item/started correlates MCP approvals to tool calls.
     private readonly pendingUrlElicitations = new Map<string, Set<string>>();
 
     constructor(
         connection: AcpClientConnection,
         permissionContext: PermissionPromptContext,
         clientCapabilities: acp.ClientCapabilities | null = null,
-        cancellationSignal?: AbortSignal
+        cancellationSignal?: AbortSignal,
+        private readonly fullAccessHttpServers?: (params: Pick<McpServerElicitationRequestParams, "threadId" | "turnId">) => ReadonlySet<string> | undefined,
     ) {
         this.connection = connection;
         this.permissionContext = permissionContext;
@@ -183,6 +171,16 @@ export class CodexElicitationHandler implements ElicitationHandler {
     ): Promise<McpServerElicitationRequestResponse> {
         try {
             const context = this.createMcpElicitationContext(params);
+            const httpServers = this.fullAccessHttpServers?.(params);
+            if (httpServers !== undefined) {
+                const accepted = !this.cancellationSignal?.aborted
+                    && params.mode === "form"
+                    && context.isToolApproval
+                    && context.persistOptions.has("session")
+                    && httpServers.has(params.serverName);
+                await this.publishAcceptedMcpToolApproval(params.threadId, context, accepted);
+                return {action: accepted ? "accept" : "cancel", content: accepted ? {} : null, _meta: null};
+            }
             if (this.shouldUseAcpElicitation(params)) {
                 const response = await this.connection.request(
                     acp.methods.client.elicitation.create,
@@ -248,6 +246,12 @@ export class CodexElicitationHandler implements ElicitationHandler {
     }
 
     async handleUserInput(params: ToolRequestUserInputParams): Promise<ToolRequestUserInputResponse> {
+        // Codex's skill dependency installer checks only `never`, so retain its refusal under the granular policy.
+        if (this.fullAccessHttpServers?.(params) !== undefined
+            && params.itemId === `mcp-deps-${params.turnId}`
+            && params.questions.some(question => question.id === "skill_mcp_dependency_install")) {
+            return {answers: {}};
+        }
         if (!clientSupportsFormElicitation(this.clientCapabilities)) {
             return { answers: {} };
         }
