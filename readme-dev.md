@@ -27,6 +27,25 @@ launch variable is removed from the Codex child environment after it is parsed.
 Malformed or incomplete mappings fail startup instead of falling back to legacy
 sandbox behavior.
 
+With external profiles, Full access approves unannotated tools on HTTP MCP servers
+injected by ACP for the active prompt. Codex keeps all granular approval categories
+disabled, including server-origin elicitations; its separate native tool-approval
+requests are accepted once for these servers. Changing mode invalidates that
+prompt's automatic approvals. Other modes retain their normal approval options.
+
+Native MCP configuration, explicit per-tool approval rules, and stdio servers do
+not acquire automatic approval. Unknown child turns and already-loaded resumed
+threads also remain excluded because the adapter cannot verify their effective
+permission policy or MCP configuration. Cold resumes apply the supplied config.
+Native Codex hooks report `permission_mode: default` for this granular policy.
+
+The local regression suite uses a real Codex binary and a loopback model/MCP
+fixture, with no account credentials:
+
+```bash
+RUN_LOCAL_CODEX_TESTS=true LOCAL_CODEX_BINARY="$PWD/node_modules/.bin/codex" npm exec -- vitest run src/__tests__/CodexACPAgent/e2e/acp-e2e-local-mcp-approval.test.ts --retry=0
+```
+
 ### Quick start
 
 #### Develop on Windows?

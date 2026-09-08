@@ -1,9 +1,11 @@
 import {describe, expect, it, vi} from "vitest";
+import * as acp from "@agentclientprotocol/sdk";
 import type {SessionState} from "../CodexAcpServer";
 import {CodexElicitationHandler} from "../CodexElicitationHandler";
 import type {AcpClientConnection} from "../ACPSessionConnection";
 import type {ServerNotification} from "../app-server";
 import {PermissionLifecycleContext} from "../permissions/lifecycle";
+import {CodexApprovalHandler} from "../permissions/CodexApprovalHandler";
 
 function sessionState(): SessionState {
     return {
@@ -188,5 +190,95 @@ describe("PermissionLifecycleContext", () => {
             "correlated-call",
             "elicitation:session:server:1",
         ]);
+    });
+
+    it("autoapproves only eligible HTTP auto policy and restores client approval on a mode change", async () => {
+        let httpServers: ReadonlySet<string> | undefined = new Set(["server"]);
+        const request = vi.fn().mockResolvedValue({outcome: {outcome: "selected", optionId: "allow_once"}});
+        const notify = vi.fn();
+        const prompt = new PermissionLifecycleContext(sessionState()).beginPrompt();
+        const handler = new CodexElicitationHandler(
+            {request, notify} as unknown as AcpClientConnection,
+            prompt, null, undefined, () => httpServers,
+        );
+        const approval = {
+            threadId: "thread", turnId: "turn-1", serverName: "server", mode: "form" as const,
+            _meta: {codex_approval_kind: "mcp_tool_call", persist: "session"},
+            message: "Allow?", requestedSchema: {type: "object" as const, properties: {}},
+        };
+        prompt.handleNotification(mcpStarted("call", "turn-1"));
+        expect(await handler.handleElicitation(approval)).toEqual({action: "accept", content: {}, _meta: null});
+        expect(notify).toHaveBeenCalledWith(acp.methods.client.session.update, {
+            sessionId: "thread", update: {sessionUpdate: "tool_call_update", toolCallId: "call", status: "in_progress"},
+        });
+        for (const rejected of [
+            {...approval, serverName: "stdio"},
+            {...approval, _meta: {codex_approval_kind: "mcp_tool_call"}},
+            {...approval, _meta: null},
+            {...approval, requestedSchema: {type: "object" as const, properties: {value: {type: "string" as const}}}},
+        ]) {
+            expect(await handler.handleElicitation(rejected)).toEqual({action: "cancel", content: null, _meta: null});
+        }
+        expect(request).not.toHaveBeenCalled();
+        httpServers = undefined;
+        expect(await handler.handleElicitation(approval)).toEqual({action: "accept", content: null, _meta: null});
+        expect(request).toHaveBeenCalledTimes(1);
+        httpServers = new Set(["server"]);
+        expect(await handler.handleElicitation(approval)).toEqual({action: "accept", content: {}, _meta: null});
+        expect(request).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not autoapprove a cancelled Full access request", async () => {
+        const cancellation = new AbortController();
+        cancellation.abort();
+        const request = vi.fn();
+        const handler = new CodexElicitationHandler(
+            {request} as unknown as AcpClientConnection,
+            new PermissionLifecycleContext(sessionState()).beginPrompt(),
+            null, cancellation.signal, () => new Set(["server"]),
+        );
+        expect(await handler.handleElicitation({
+            threadId: "thread", turnId: "turn-1", serverName: "server", mode: "form",
+            _meta: {codex_approval_kind: "mcp_tool_call", persist: "session"},
+            message: "Allow?", requestedSchema: {type: "object", properties: {}},
+        })).toEqual({action: "cancel", content: null, _meta: null});
+        expect(request).not.toHaveBeenCalled();
+    });
+
+    it("keeps Full access permission refusals without blocking ordinary questions", async () => {
+        let fullAccess = true;
+        const request = vi.fn().mockResolvedValue({action: "accept", content: {choice: "Proceed"}});
+        const connection = {request} as unknown as AcpClientConnection;
+        const prompt = new PermissionLifecycleContext(sessionState()).beginPrompt();
+        const elicitation = new CodexElicitationHandler(
+            connection, prompt, {elicitation: {form: {}}}, undefined,
+            () => fullAccess ? new Set(["server"]) : undefined,
+        );
+        const approvals = new CodexApprovalHandler(connection, prompt, undefined, () => fullAccess);
+        const input = {
+            threadId: "thread", turnId: "turn-1", itemId: "mcp-deps-turn-1", isBlocking: true, autoResolutionMs: null,
+            questions: [{id: "skill_mcp_dependency_install", header: "Install", question: "Install MCP dependency?",
+                isOther: false, isSecret: false, options: null}],
+        };
+        expect(await elicitation.handleUserInput(input)).toEqual({answers: {}});
+        const network = {
+            kind: "command" as const, threadId: "thread", turnId: "turn-1", itemId: "network", startedAtMs: 0,
+            environmentId: null, networkApprovalContext: {host: "example.test", protocol: "https" as const},
+        };
+        expect(await approvals.handleCommandExecution(network)).toEqual({decision: "cancel"});
+        expect(await approvals.handlePermissionsRequest({
+            threadId: "thread", turnId: "turn-1", itemId: "permissions", startedAtMs: 0,
+            environmentId: null, cwd: "/workspace", reason: null, permissions: {network: {enabled: true}, fileSystem: null},
+        })).toEqual({permissions: {}, scope: "turn", strictAutoReview: false});
+        expect(request).not.toHaveBeenCalled();
+
+        for (fullAccess of [true, false]) {
+            expect(await elicitation.handleUserInput({
+                ...input, itemId: "question", questions: [{...input.questions[0]!, id: "choice"}],
+            })).toEqual({answers: {choice: {answers: ["Proceed"]}}});
+        }
+        request.mockResolvedValueOnce({outcome: {outcome: "selected", optionId: "allow_once"}});
+        expect(await approvals.handleCommandExecution(network)).toEqual({decision: "accept"});
+        expect(request).toHaveBeenCalledTimes(3);
     });
 });
