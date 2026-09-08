@@ -29,6 +29,15 @@ launch variable is removed from the Codex child environment after it is parsed.
 Malformed or incomplete mappings fail startup instead of falling back to legacy
 sandbox behavior.
 
+With external profiles, Full access accepts native tool approvals once for HTTP
+MCP servers injected by ACP during the current prompt; changing mode revokes this.
+All granular approval categories, including server-origin elicitations, stay
+disabled. Other modes retain their normal approval options. Native MCP settings,
+explicit per-tool approval rules, and stdio servers receive no automatic approval.
+Child turns and already-loaded resumes are excluded because their effective
+policy or configuration cannot be verified; cold resumes apply the supplied config.
+Native hooks report `permission_mode: default` for this granular policy.
+
 ### Quick start
 
 #### Develop on Windows?
