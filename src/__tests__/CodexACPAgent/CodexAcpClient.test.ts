@@ -1903,6 +1903,33 @@ describe('ACP server test', { timeout: 40_000 }, () => {
         expect(turnStartSpy).not.toHaveBeenCalled();
     });
 
+    it('cancels a pending Full access prompt after a mode downgrade', async () => {
+        const {mockFixture, sessionState, turnStartSpy} = setupPromptTestSession({
+            cwd: "/workspace",
+            agentMode: AgentMode.AgentFullAccess,
+        }, TEST_PERMISSION_PROFILE_CONFIG);
+        const skillsRefresh = deferred<{data: []}>();
+        const listSkillsSpy = vi.spyOn(mockFixture.getCodexAppServerClient(), "listSkills")
+            .mockReturnValue(skillsRefresh.promise);
+        const settingsSpy = vi.spyOn(mockFixture.getCodexAppServerClient(), "threadSettingsUpdate")
+            .mockResolvedValue(undefined);
+        const agent = mockFixture.getCodexAcpAgent();
+        // @ts-expect-error - registering local session state for the ACP mode change path
+        agent.sessions.set(sessionState.sessionId, sessionState);
+
+        const promptPromise = agent.prompt({
+            sessionId: "session-id",
+            prompt: [{type: "text", text: "Update the project"}],
+        });
+        await vi.waitFor(() => expect(listSkillsSpy).toHaveBeenCalled());
+        await agent.setSessionMode({sessionId: "session-id", modeId: AgentMode.ReadOnly.id});
+        skillsRefresh.resolve({data: []});
+
+        await expect(promptPromise).resolves.toMatchObject({stopReason: "cancelled"});
+        expect(settingsSpy).toHaveBeenCalledWith(expect.objectContaining({approvalPolicy: "on-request"}));
+        expect(turnStartSpy).not.toHaveBeenCalled();
+    });
+
     it('should send attachments as prompt items', async () => {
         const mockFixture = createCodexMockTestFixture();
         const codexAcpAgent = mockFixture.getCodexAcpAgent();

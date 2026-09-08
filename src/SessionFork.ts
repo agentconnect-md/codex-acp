@@ -64,6 +64,7 @@ export async function forkSession(
         currentServiceTier: response.serviceTier as ServiceTier ?? null,
         additionalDirectories,
         skippedMcpServers: sessionConfig.skippedMcpServers,
+        fullAccessHttpMcpServers: sessionConfig.fullAccessHttpMcpServers,
     };
 }
 

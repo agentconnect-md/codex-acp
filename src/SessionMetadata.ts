@@ -1,7 +1,6 @@
 import type {ModeKind} from "./app-server/ModeKind";
 import type {ServiceTier} from "./app-server/ServiceTier";
 import type {Model, Thread, ThreadItem} from "./app-server/v2";
-
 export type SessionMetadata = {
     sessionId: string,
     currentModelId: string,
@@ -11,6 +10,7 @@ export type SessionMetadata = {
     currentServiceTier?: ServiceTier | null,
     additionalDirectories: string[],
     skippedMcpServers?: string[],
+    fullAccessHttpMcpServers?: string[],
 }
 
 export type SessionMetadataWithThread = SessionMetadata & {
