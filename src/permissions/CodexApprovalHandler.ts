@@ -35,6 +35,7 @@ export class CodexApprovalHandler implements ApprovalHandler {
         private readonly connection: AcpClientConnection,
         private readonly permissionContext: PermissionPromptContext,
         private readonly cancellationSignal?: AbortSignal,
+        private readonly denyRequests?: () => boolean,
     ) {}
 
     async handleCommandExecution(
@@ -103,6 +104,7 @@ export class CodexApprovalHandler implements ApprovalHandler {
     }
 
     private requestPermission(request: acp.RequestPermissionRequest): Promise<acp.RequestPermissionResponse> {
+        if (this.denyRequests?.()) return Promise.resolve({outcome: {outcome: "cancelled"}});
         return this.connection.request(
             acp.methods.client.session.requestPermission,
             request,
