@@ -613,7 +613,7 @@ export class CodexAcpClient {
         await this.refreshSkills(request.cwd, additionalDirectories);
 
         const prepared = await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? []);
-        await this.restrictResumedHttpMcpServers(request.sessionId, prepared);
+        await this.restrictResumedMcpServers(request.sessionId, prepared);
         const response = await this.resumeThread({
             excludeTurns: true,
             config: prepared.config,
@@ -634,7 +634,7 @@ export class CodexAcpClient {
             modelProvider: response.modelProvider,
             currentServiceTier: response.serviceTier as ServiceTier ?? null,
             additionalDirectories,
-            fullAccessHttpMcpServers: prepared.fullAccessHttpMcpServers,
+            fullAccessApprovedMcpServers: prepared.fullAccessApprovedMcpServers,
         }
     }
 
@@ -659,7 +659,7 @@ export class CodexAcpClient {
         await this.refreshSkills(request.cwd, additionalDirectories);
 
         const prepared = await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? []);
-        await this.restrictResumedHttpMcpServers(request.sessionId, prepared);
+        await this.restrictResumedMcpServers(request.sessionId, prepared);
         const response = await this.resumeThread({
             excludeTurns: true,
             config: prepared.config,
@@ -696,7 +696,7 @@ export class CodexAcpClient {
             thread,
             history,
             additionalDirectories,
-            fullAccessHttpMcpServers: prepared.fullAccessHttpMcpServers,
+            fullAccessApprovedMcpServers: prepared.fullAccessApprovedMcpServers,
         };
     }
 
@@ -752,7 +752,7 @@ export class CodexAcpClient {
             modelProvider: response.modelProvider,
             currentServiceTier: response.serviceTier as ServiceTier ?? null,
             additionalDirectories,
-            fullAccessHttpMcpServers: prepared.fullAccessHttpMcpServers,
+            fullAccessApprovedMcpServers: prepared.fullAccessApprovedMcpServers,
         };
     }
 
@@ -789,11 +789,11 @@ export class CodexAcpClient {
         return {granular: {sandbox_approval: false, rules: false, skill_approval: false, request_permissions: false, mcp_elicitations: false}};
     }
 
-    private async restrictResumedHttpMcpServers(sessionId: string, prepared: PreparedSessionConfig): Promise<void> {
-        if (prepared.fullAccessHttpMcpServers.length === 0) return;
+    private async restrictResumedMcpServers(sessionId: string, prepared: PreparedSessionConfig): Promise<void> {
+        if (prepared.fullAccessApprovedMcpServers.length === 0) return;
         const loaded = await this.codexClient.threadLoadedList({});
-        // A loaded thread may ignore resume config, so its requested transport is not proof of its actual transport.
-        if (loaded.data.includes(sessionId) || loaded.nextCursor !== null) prepared.fullAccessHttpMcpServers = [];
+        // A loaded thread may ignore resume config, so the servers just declared are not proof of what it actually runs.
+        if (loaded.data.includes(sessionId) || loaded.nextCursor !== null) prepared.fullAccessApprovedMcpServers = [];
     }
 
     async deleteSession(sessionId: string): Promise<void> {
@@ -928,7 +928,7 @@ export class CodexAcpClient {
         };
         const configWithWorkspaceRoots = mergeSandboxWorkspaceWriteRoots(mergedConfig, additionalDirectories);
         if (mcpServers.length === 0) {
-            return {config: configWithWorkspaceRoots, fullAccessHttpMcpServers: []};
+            return {config: configWithWorkspaceRoots, fullAccessApprovedMcpServers: []};
         }
 
         const requestedServers = mcpServers.map(mcp => ({
@@ -944,18 +944,17 @@ export class CodexAcpClient {
             serversToConfigure = requestedServers.filter(mcp => !existingNames.has(mcp.name));
         }
         if (serversToConfigure.length === 0) {
-            return {config: configWithWorkspaceRoots, fullAccessHttpMcpServers: []};
+            return {config: configWithWorkspaceRoots, fullAccessApprovedMcpServers: []};
         }
 
         const configuredServers = Object.fromEntries(serversToConfigure.map(mcp => [mcp.name, this.createMcpSeverConfig(mcp.server)]));
         const inheritedServers = isJsonObject(this.config["mcp_servers"]) ? this.config["mcp_servers"] : {};
         return {
             config: {...configWithWorkspaceRoots, mcp_servers: configuredServers},
-            fullAccessHttpMcpServers: this.permissionProfileConfig
-                ? Object.entries(configuredServers)
-                    .filter(([name, server]) => typeof server["url"] === "string"
-                        && !existingNames.has(name) && !Object.hasOwn(inheritedServers, name))
-                    .map(([name]) => name)
+            // Every server the launcher injected, on any transport; a name any config layer also declares is never approved, so session config cannot borrow a launcher's name.
+            fullAccessApprovedMcpServers: this.permissionProfileConfig
+                ? Object.keys(configuredServers)
+                    .filter(name => !existingNames.has(name) && !Object.hasOwn(inheritedServers, name))
                 : [],
         };
     }
