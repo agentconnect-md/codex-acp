@@ -148,7 +148,7 @@ export class CodexElicitationHandler implements ElicitationHandler {
         permissionContext: PermissionPromptContext,
         clientCapabilities: acp.ClientCapabilities | null = null,
         cancellationSignal?: AbortSignal,
-        private readonly fullAccessHttpServers?: (params: Pick<McpServerElicitationRequestParams, "threadId" | "turnId">) => ReadonlySet<string> | undefined,
+        private readonly fullAccessApprovedServers?: (params: Pick<McpServerElicitationRequestParams, "threadId" | "turnId">) => ReadonlySet<string> | undefined,
     ) {
         this.connection = connection;
         this.permissionContext = permissionContext;
@@ -171,13 +171,13 @@ export class CodexElicitationHandler implements ElicitationHandler {
     ): Promise<McpServerElicitationRequestResponse> {
         try {
             const context = this.createMcpElicitationContext(params);
-            const httpServers = this.fullAccessHttpServers?.(params);
-            if (httpServers !== undefined) {
+            const approvedServers = this.fullAccessApprovedServers?.(params);
+            if (approvedServers !== undefined) {
                 const accepted = !this.cancellationSignal?.aborted
                     && params.mode === "form"
                     && context.isToolApproval
                     && context.persistOptions.has("session")
-                    && httpServers.has(params.serverName);
+                    && approvedServers.has(params.serverName);
                 await this.publishAcceptedMcpToolApproval(params.threadId, context, accepted);
                 return {action: accepted ? "accept" : "cancel", content: accepted ? {} : null, _meta: null};
             }
@@ -247,7 +247,7 @@ export class CodexElicitationHandler implements ElicitationHandler {
 
     async handleUserInput(params: ToolRequestUserInputParams): Promise<ToolRequestUserInputResponse> {
         // Codex's skill dependency installer checks only `never`, so retain its refusal under the granular policy.
-        if (this.fullAccessHttpServers?.(params) !== undefined
+        if (this.fullAccessApprovedServers?.(params) !== undefined
             && params.itemId === `mcp-deps-${params.turnId}`
             && params.questions.some(question => question.id === "skill_mcp_dependency_install")) {
             return {answers: {}};

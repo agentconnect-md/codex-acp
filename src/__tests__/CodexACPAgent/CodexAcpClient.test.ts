@@ -560,6 +560,58 @@ describe('ACP server test', { timeout: 40_000 }, () => {
         });
     });
 
+    it('approves a launcher-vouched stdio MCP server under protected Full access', async () => {
+        const profileConfig = {
+            ...TEST_PERMISSION_PROFILE_CONFIG,
+            trustedMcpServers: [{name: "bridge", credential: "launch-secret"}],
+        };
+        const mockFixture = createCodexMockTestFixture(undefined, undefined, profileConfig);
+        const codexAcpClient = mockFixture.getCodexAcpClient();
+        const codexAppServerClient = mockFixture.getCodexAppServerClient();
+
+        vi.spyOn(codexAppServerClient, "skillsExtraRootsSet").mockResolvedValue(undefined);
+        vi.spyOn(codexAppServerClient, "listSkills").mockResolvedValue({data: []});
+        vi.spyOn(codexAppServerClient, "configRead").mockResolvedValue({config: {}, layers: []} as any);
+        const threadStartSpy = vi.spyOn(codexAppServerClient, "threadStart").mockResolvedValue({
+            thread: {id: "thread-id"} as any,
+            model: "gpt-5",
+            reasoningEffort: "medium",
+            serviceTier: null,
+        } as any);
+        vi.spyOn(codexAppServerClient, "listModels").mockResolvedValue({
+            data: [createTestModel({id: "gpt-5"})],
+            nextCursor: null,
+        });
+
+        const session = await codexAcpClient.newSession({
+            cwd: "/workspace",
+            additionalDirectories: [],
+            mcpServers: [
+                {
+                    name: "bridge",
+                    command: "/usr/bin/node",
+                    args: ["bridge.js"],
+                    env: [
+                        {name: "CODEX_ACP_MCP_SERVER_CREDENTIAL", value: "launch-secret"},
+                        {name: "BRIDGE_TOKEN", value: "session-token"},
+                    ],
+                },
+                // Same transport, no credential: an org-configured stdio server stays unapproved.
+                {name: "unvouched", command: "/usr/bin/node", args: ["other.js"], env: []},
+                // A forged name without the secret proves nothing.
+                {name: "bridge-impostor", command: "/usr/bin/node", args: ["evil.js"], env: [
+                    {name: "CODEX_ACP_MCP_SERVER_CREDENTIAL", value: "guessed"},
+                ]},
+            ],
+        });
+
+        expect(session.fullAccessApprovedMcpServers).toEqual(["bridge"]);
+        const configuredServers = threadStartSpy.mock.calls[0]![0].config?.["mcp_servers"] as Record<string, any>;
+        // The provenance secret proves origin to the adapter only; it never reaches Codex or the spawned server.
+        expect(configuredServers["bridge"].env).toEqual({BRIDGE_TOKEN: "session-token"});
+        expect(JSON.stringify(threadStartSpy.mock.calls[0]![0])).not.toContain("launch-secret");
+    });
+
     it('applies ACP additional directories to resumed and loaded sessions explicitly', async () => {
         const mockFixture = createCodexMockTestFixture(undefined, undefined, TEST_PERMISSION_PROFILE_CONFIG);
         const codexAcpClient = mockFixture.getCodexAcpClient();
