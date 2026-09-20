@@ -10,7 +10,7 @@ export type SessionMetadata = {
     currentServiceTier?: ServiceTier | null,
     additionalDirectories: string[],
     skippedMcpServers?: string[],
-    fullAccessHttpMcpServers?: string[],
+    fullAccessApprovedMcpServers?: string[],
 }
 
 export type SessionMetadataWithThread = SessionMetadata & {
