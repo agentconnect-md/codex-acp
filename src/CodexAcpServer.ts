@@ -166,7 +166,7 @@ export interface SessionState {
     supportedInputModalities: Array<InputModality>,
     agentMode: AgentMode,
     permissionModeRevision?: number;
-    fullAccessHttpMcpServers?: string[];
+    fullAccessApprovedMcpServers?: string[];
     collaborationMode: ModeKind,
     currentTurnId: string | null;
     lastTokenUsage: TokenCount | null;
@@ -675,7 +675,7 @@ export class CodexAcpServer {
             supportedReasoningEfforts: currentModel?.supportedReasoningEfforts ?? [],
             supportedInputModalities: currentModel?.inputModalities ?? ["text", "image"],
             agentMode: AgentMode.getInitialAgentMode(),
-            fullAccessHttpMcpServers: sessionMetadata.fullAccessHttpMcpServers ?? [],
+            fullAccessApprovedMcpServers: sessionMetadata.fullAccessApprovedMcpServers ?? [],
             collaborationMode: sessionMetadata.collaborationMode,
             currentTurnId: null,
             lastTokenUsage: null,
@@ -1065,7 +1065,7 @@ export class CodexAcpServer {
                         additionalDirectories: session.additionalDirectories,
                         mcpServers: session.mcpServers ?? [],
                     });
-                    session.fullAccessHttpMcpServers = metadata.fullAccessHttpMcpServers ?? [];
+                    session.fullAccessApprovedMcpServers = metadata.fullAccessApprovedMcpServers ?? [];
                     session.authProvider = replacement.getModelProvider();
                     session.asyncTasks.refresh();
                     logger.log("Resumed session after provider restart", {sessionId: session.sessionId});
@@ -1944,7 +1944,7 @@ export class CodexAcpServer {
             supportedReasoningEfforts: currentModel?.supportedReasoningEfforts ?? [],
             supportedInputModalities: currentModel?.inputModalities ?? ["text", "image"],
             agentMode: AgentMode.getInitialAgentMode(),
-            fullAccessHttpMcpServers: sessionMetadata.fullAccessHttpMcpServers ?? [],
+            fullAccessApprovedMcpServers: sessionMetadata.fullAccessApprovedMcpServers ?? [],
             collaborationMode: sessionMetadata.collaborationMode,
             currentTurnId: null,
             lastTokenUsage: null,
@@ -2823,8 +2823,8 @@ export class CodexAcpServer {
             const permissionContext = permissionLifecycle.beginPrompt();
             let promptAgentMode: AgentMode | undefined;
             let permissionModeRevision: number | undefined;
-            const httpServers = new Set(sessionState.fullAccessHttpMcpServers);
-            const noHttpServers = new Set<string>();
+            const approvedServers = new Set(sessionState.fullAccessApprovedMcpServers);
+            const noApprovedServers = new Set<string>();
             let mcpApprovalTurnId: string | null = null;
             const isProtectedFullAccess = () => this.codexAcpClient.isProtectedFullAccess(promptAgentMode ?? sessionState.agentMode);
             const approvalHandler = new CodexApprovalHandler(
@@ -2843,7 +2843,7 @@ export class CodexAcpServer {
                     return mcpApprovalTurnId !== null && request.turnId === mcpApprovalTurnId
                         && sessionState.agentMode.kind === "full_access"
                         && sessionState.permissionModeRevision === permissionModeRevision
-                        ? httpServers : noHttpServers;
+                        ? approvedServers : noApprovedServers;
                 },
             );
             const observeInteraction = async (event: ServerNotification): Promise<void> => {
