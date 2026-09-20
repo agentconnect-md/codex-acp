@@ -991,6 +991,50 @@ describe('ACP server test', { timeout: 40_000 }, () => {
         });
     });
 
+    it('approves every launcher-injected MCP server under Full access unless a config layer declares its name', async () => {
+        const mockFixture = createCodexMockTestFixture(undefined, undefined, TEST_PERMISSION_PROFILE_CONFIG);
+        const codexAcpClient = mockFixture.getCodexAcpClient();
+        const codexAppServerClient = mockFixture.getCodexAppServerClient();
+
+        vi.spyOn(codexAppServerClient, "listSkills").mockResolvedValue({data: []});
+        vi.spyOn(codexAppServerClient, "configRead").mockResolvedValue({
+            config: {mcp_servers: {shadowed: {command: "npx", args: ["shadowed"]}}},
+        } as any);
+        vi.spyOn(codexAppServerClient, "threadStart").mockResolvedValue({
+            thread: {id: "thread-id"} as any,
+            model: "gpt-5",
+            reasoningEffort: "medium",
+            serviceTier: null,
+        } as any);
+        vi.spyOn(codexAppServerClient, "listModels").mockResolvedValue({
+            data: [createTestModel({id: "gpt-5"})],
+            nextCursor: null,
+        });
+
+        const metadata = await codexAcpClient.newSession({
+            cwd: "/workspace",
+            mcpServers: [{
+                name: "bridge",
+                command: "node",
+                args: ["bridge"],
+                env: [{name: "TOKEN", value: "secret"}],
+            }, {
+                type: "http",
+                name: "assigned",
+                url: "https://example.com/mcp",
+                headers: [],
+            }, {
+                name: "shadowed",
+                command: "npx",
+                args: ["shadowed"],
+                env: [],
+            }],
+        });
+
+        // The stdio bridge is approved like the HTTP server; a name a config layer declares is not, whatever its transport.
+        expect(metadata.fullAccessApprovedMcpServers).toEqual(["bridge", "assigned"]);
+    });
+
     it('waits for typed mcp startup status updates and returns terminal states', async () => {
         const mockFixture = createCodexMockTestFixture();
         const codexAcpClient = mockFixture.getCodexAcpClient();

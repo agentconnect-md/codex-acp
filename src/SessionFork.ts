@@ -48,7 +48,7 @@ export async function forkSession(
         modelProvider: response.modelProvider,
         currentServiceTier: response.serviceTier as ServiceTier ?? null,
         additionalDirectories,
-        fullAccessHttpMcpServers: prepared.fullAccessHttpMcpServers,
+        fullAccessApprovedMcpServers: prepared.fullAccessApprovedMcpServers,
     };
 }
 
