@@ -16,9 +16,10 @@ Set `CODEX_PATH` to run a different Codex binary; versions other than the one sp
 ### External permission profiles
 
 A trusted runtime launcher may set `CODEX_ACP_PERMISSION_PROFILE_CONFIG` to a JSON
-object containing `configOverrides` for the long-lived Codex app-server and a
+object containing `configOverrides` for the long-lived Codex app-server, a
 `modeProfiles` mapping for the `read-only`, `agent`, and `agent-full-access` ACP
-modes. The adapter treats profile definitions as opaque operator policy.
+modes, and an optional `trustedMcpServers` list. The adapter treats profile
+definitions as opaque operator policy.
 
 When configured, codex-acp selects the matching profile on thread start, resume,
 and mode changes, preserves ACP additional workspace roots, and omits the legacy
@@ -27,14 +28,29 @@ launch variable is removed from the Codex child environment after it is parsed.
 Malformed or incomplete mappings fail startup instead of falling back to legacy
 sandbox behavior.
 
-With external profiles, Full access accepts native tool approvals once for HTTP
-MCP servers injected by ACP during the current prompt; changing mode revokes this.
-All granular approval categories, including server-origin elicitations, stay
-disabled. Other modes retain their normal approval options. Native MCP settings,
-explicit per-tool approval rules, and stdio servers receive no automatic approval.
-Child turns and already-loaded resumes are excluded because their effective
-policy or configuration cannot be verified; cold resumes apply the supplied config.
+With external profiles, Full access accepts native tool approvals once during the
+current prompt for two kinds of ACP-injected MCP server: those reached over HTTP,
+and those the launcher vouched for through `trustedMcpServers`. Changing mode
+revokes this. All granular approval categories, including server-origin
+elicitations, stay disabled. Other modes retain their normal approval options.
+Native MCP settings, explicit per-tool approval rules, and servers that are
+neither HTTP nor vouched for receive no automatic approval. Child turns and
+already-loaded resumes are excluded because their effective policy or
+configuration cannot be verified; cold resumes apply the supplied config.
 Native hooks report `permission_mode: default` for this granular policy.
+
+#### Vouching for an injected server
+
+`trustedMcpServers` is a list of `{name, credential}` entries. A launcher that
+injects its own MCP server — typically over stdio, which no transport check can
+distinguish from a server named in session config — lists the server here and
+passes the same secret to the server itself in the `CODEX_ACP_MCP_SERVER_CREDENTIAL`
+environment entry of the injected `mcpServers` record. The adapter approves the
+server only when both the name and the secret match, so declaring a server under
+a trusted name is not by itself enough to be trusted. Generate the secret per
+launch and keep it out of anything the model can read. The adapter compares it in
+constant time and strips it from the configuration it hands to Codex, so it never
+reaches the spawned server's environment.
 
 ### Quick start
 

@@ -61,6 +61,8 @@ import {forkSession as runForkSession} from "./SessionFork";
 import type {PreparedSessionConfig, SessionMetadata, SessionMetadataWithThread} from "./SessionMetadata";
 export type {SessionMetadata, SessionMetadataWithThread} from "./SessionMetadata";
 import {
+    hasTrustedMcpCredential,
+    MCP_SERVER_CREDENTIAL_ENV,
     permissionProfileForMode,
     type PermissionProfileConfig,
 } from "./PermissionProfileConfig";
@@ -533,7 +535,7 @@ export class CodexAcpClient {
         await this.refreshSkills(request.cwd, additionalDirectories);
 
         const prepared = await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? []);
-        await this.restrictResumedHttpMcpServers(request.sessionId, prepared);
+        await this.restrictResumedMcpServers(request.sessionId, prepared);
         const response = await this.codexClient.threadResume({
             excludeTurns: true,
             config: prepared.config,
@@ -553,7 +555,7 @@ export class CodexAcpClient {
             modelProvider: response.modelProvider,
             currentServiceTier: response.serviceTier as ServiceTier ?? null,
             additionalDirectories,
-            fullAccessHttpMcpServers: prepared.fullAccessHttpMcpServers,
+            fullAccessApprovedMcpServers: prepared.fullAccessApprovedMcpServers,
         }
     }
 
@@ -578,7 +580,7 @@ export class CodexAcpClient {
         await this.refreshSkills(request.cwd, additionalDirectories);
 
         const prepared = await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? []);
-        await this.restrictResumedHttpMcpServers(request.sessionId, prepared);
+        await this.restrictResumedMcpServers(request.sessionId, prepared);
         const response = await this.codexClient.threadResume({
             excludeTurns: true,
             config: prepared.config,
@@ -609,7 +611,7 @@ export class CodexAcpClient {
             currentServiceTier: response.serviceTier as ServiceTier ?? null,
             thread,
             additionalDirectories,
-            fullAccessHttpMcpServers: prepared.fullAccessHttpMcpServers,
+            fullAccessApprovedMcpServers: prepared.fullAccessApprovedMcpServers,
         };
     }
 
@@ -643,7 +645,7 @@ export class CodexAcpClient {
             modelProvider: response.modelProvider,
             currentServiceTier: response.serviceTier as ServiceTier ?? null,
             additionalDirectories,
-            fullAccessHttpMcpServers: prepared.fullAccessHttpMcpServers,
+            fullAccessApprovedMcpServers: prepared.fullAccessApprovedMcpServers,
         };
     }
 
@@ -680,11 +682,11 @@ export class CodexAcpClient {
         return {granular: {sandbox_approval: false, rules: false, skill_approval: false, request_permissions: false, mcp_elicitations: false}};
     }
 
-    private async restrictResumedHttpMcpServers(sessionId: string, prepared: PreparedSessionConfig): Promise<void> {
-        if (prepared.fullAccessHttpMcpServers.length === 0) return;
+    private async restrictResumedMcpServers(sessionId: string, prepared: PreparedSessionConfig): Promise<void> {
+        if (prepared.fullAccessApprovedMcpServers.length === 0) return;
         const loaded = await this.codexClient.threadLoadedList({});
-        // A loaded thread may ignore resume config, so its requested transport is not proof of its actual transport.
-        if (loaded.data.includes(sessionId) || loaded.nextCursor !== null) prepared.fullAccessHttpMcpServers = [];
+        // A loaded thread may ignore resume config, so what we just described is not proof of what it actually runs.
+        if (loaded.data.includes(sessionId) || loaded.nextCursor !== null) prepared.fullAccessApprovedMcpServers = [];
     }
 
     async deleteSession(sessionId: string): Promise<void> {
@@ -801,7 +803,7 @@ export class CodexAcpClient {
         };
         const configWithWorkspaceRoots = mergeSandboxWorkspaceWriteRoots(mergedConfig, additionalDirectories);
         if (mcpServers.length === 0) {
-            return {config: configWithWorkspaceRoots, fullAccessHttpMcpServers: []};
+            return {config: configWithWorkspaceRoots, fullAccessApprovedMcpServers: []};
         }
 
         const requestedServers = mcpServers.map(mcp => ({
@@ -817,16 +819,25 @@ export class CodexAcpClient {
             serversToConfigure = requestedServers.filter(mcp => !existingNames.has(mcp.name));
         }
         if (serversToConfigure.length === 0) {
-            return {config: configWithWorkspaceRoots, fullAccessHttpMcpServers: []};
+            return {config: configWithWorkspaceRoots, fullAccessApprovedMcpServers: []};
         }
 
-        const configuredServers = Object.fromEntries(serversToConfigure.map(mcp => [mcp.name, this.createMcpSeverConfig(mcp.server)]));
+        const profileConfig = this.permissionProfileConfig;
+        const vouchedNames = new Set<string>();
+        const configuredServers: Record<string, ReturnType<CodexAcpClient["createMcpSeverConfig"]>> = {};
+        for (const mcp of serversToConfigure) {
+            const server = this.createMcpSeverConfig(mcp.server);
+            if (profileConfig && hasTrustedMcpCredential(profileConfig, mcp.name, server["env"])) vouchedNames.add(mcp.name);
+            // The credential only ever proves origin to this adapter, so it never reaches the spawned server.
+            configuredServers[mcp.name] = withoutMcpCredentialEnv(server);
+        }
         const inheritedServers = isJsonObject(this.config["mcp_servers"]) ? this.config["mcp_servers"] : {};
         return {
             config: {...configWithWorkspaceRoots, mcp_servers: configuredServers},
-            fullAccessHttpMcpServers: this.permissionProfileConfig
+            // A launcher-vouched server is approved on ANY transport; an unvouched one still needs the assigned-HTTP shape.
+            fullAccessApprovedMcpServers: profileConfig
                 ? Object.entries(configuredServers)
-                    .filter(([name, server]) => typeof server["url"] === "string"
+                    .filter(([name, server]) => (typeof server["url"] === "string" || vouchedNames.has(name))
                         && !existingNames.has(name) && !Object.hasOwn(inheritedServers, name))
                     .map(([name]) => name)
                 : [],
@@ -1436,4 +1447,12 @@ function mergeGatewayConfig(config: JsonObject, gatewayConfig: GatewayConfig | n
     } else {
         return config;
     }
+}
+
+/** Drop the adapter-only provenance secret so it is never written into Codex config or the server's environment. */
+function withoutMcpCredentialEnv<T extends {[key: string]: unknown}>(server: T): T {
+    const env = server["env"];
+    if (typeof env !== "object" || env === null || !Object.hasOwn(env, MCP_SERVER_CREDENTIAL_ENV)) return server;
+    const {[MCP_SERVER_CREDENTIAL_ENV]: _credential, ...rest} = env as Record<string, unknown>;
+    return {...server, env: rest};
 }

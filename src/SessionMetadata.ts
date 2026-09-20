@@ -5,7 +5,7 @@ import type {JsonValue} from "./app-server/serde_json/JsonValue";
 
 export type PreparedSessionConfig = {
     config: {[key: string]: JsonValue | undefined};
-    fullAccessHttpMcpServers: string[];
+    fullAccessApprovedMcpServers: string[];
 };
 
 export type SessionMetadata = {
@@ -16,7 +16,7 @@ export type SessionMetadata = {
     modelProvider?: string | null,
     currentServiceTier?: ServiceTier | null,
     additionalDirectories: string[],
-    fullAccessHttpMcpServers?: string[],
+    fullAccessApprovedMcpServers?: string[],
 }
 
 export type SessionMetadataWithThread = SessionMetadata & {
