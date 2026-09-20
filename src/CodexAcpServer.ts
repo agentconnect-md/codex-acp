@@ -237,7 +237,7 @@ export interface SessionState extends SessionIndexTitleState {
     supportedInputModalities: Array<InputModality>,
     agentMode: AgentMode,
     permissionModeRevision?: number;
-    fullAccessHttpMcpServers?: string[];
+    fullAccessApprovedMcpServers?: string[];
     collaborationMode: ModeKind,
     /** The active turn: its completion, errors and stop reason are matched against this id. */
     currentTurnId: string | null;
@@ -1193,7 +1193,7 @@ export class CodexAcpServer {
             supportedReasoningEfforts: currentModel?.supportedReasoningEfforts ?? [],
             supportedInputModalities: currentModel?.inputModalities ?? ["text", "image"],
             agentMode: AgentMode.getInitialAgentMode(),
-            fullAccessHttpMcpServers: sessionMetadata.fullAccessHttpMcpServers ?? [],
+            fullAccessApprovedMcpServers: sessionMetadata.fullAccessApprovedMcpServers ?? [],
             collaborationMode: sessionMetadata.collaborationMode,
             currentTurnId: null,
             interruptTurnId: null,
@@ -2152,7 +2152,7 @@ export class CodexAcpServer {
                         resumed = onSubscribed === undefined
                             ? await replacement.resumeSession(request, undefined, session.instructions)
                             : await replacement.resumeSession(request, onSubscribed, session.instructions);
-                        session.fullAccessHttpMcpServers = resumed.fullAccessHttpMcpServers ?? [];
+                        session.fullAccessApprovedMcpServers = resumed.fullAccessApprovedMcpServers ?? [];
                         return resumed;
                     };
                     await (this.recovery?.resumeForReplacement(session, replacementGeneration, replacement, resume) ?? resume());
@@ -2290,7 +2290,7 @@ export class CodexAcpServer {
                 }, onSubscribed, session.instructions);
                 // A session the provider restart failed to resume gets the models of the routing here.
                 await this.applyResumedModels(session, client, metadata);
-                session.fullAccessHttpMcpServers = metadata.fullAccessHttpMcpServers ?? [];
+                session.fullAccessApprovedMcpServers = metadata.fullAccessApprovedMcpServers ?? [];
                 return {collaborationMode: metadata.collaborationMode};
             },
             applyCollaborationMode: (session, client) =>
@@ -3273,7 +3273,7 @@ export class CodexAcpServer {
             supportedReasoningEfforts: currentModel?.supportedReasoningEfforts ?? [],
             supportedInputModalities: currentModel?.inputModalities ?? ["text", "image"],
             agentMode: AgentMode.getInitialAgentMode(),
-            fullAccessHttpMcpServers: sessionMetadata.fullAccessHttpMcpServers ?? [],
+            fullAccessApprovedMcpServers: sessionMetadata.fullAccessApprovedMcpServers ?? [],
             collaborationMode: sessionMetadata.collaborationMode,
             currentTurnId: null,
             interruptTurnId: null,
@@ -4561,8 +4561,8 @@ export class CodexAcpServer {
             const toolCallRenderer = new AcpToolCallRenderer(this.capabilities);
             let promptAgentMode: AgentMode | undefined;
             let permissionModeRevision: number | undefined;
-            const httpServers = new Set(sessionState.fullAccessHttpMcpServers);
-            const noHttpServers = new Set<string>();
+            const approvedServers = new Set(sessionState.fullAccessApprovedMcpServers);
+            const noApprovedServers = new Set<string>();
             let mcpApprovalTurnId: string | null = null;
             const isProtectedFullAccess = () => this.codexAcpClient.isProtectedFullAccess(promptAgentMode ?? sessionState.agentMode);
             const approvalHandler = new CodexApprovalHandler(
@@ -4583,7 +4583,7 @@ export class CodexAcpServer {
                     return mcpApprovalTurnId !== null && request.turnId === mcpApprovalTurnId
                         && sessionState.agentMode.kind === "full_access"
                         && sessionState.permissionModeRevision === permissionModeRevision
-                        ? httpServers : noHttpServers;
+                        ? approvedServers : noApprovedServers;
                 },
             );
             promptElicitations = elicitationHandler;

@@ -29,14 +29,17 @@ launch variable is removed from the Codex child environment after it is parsed.
 Malformed or incomplete mappings fail startup instead of falling back to legacy
 sandbox behavior.
 
-With external profiles, Full access accepts native tool approvals once for HTTP
-MCP servers injected by ACP during the current prompt; changing mode revokes this.
-All granular approval categories, including server-origin elicitations, stay
-disabled. Other modes retain their normal approval options. Native MCP settings,
-explicit per-tool approval rules, and stdio servers receive no automatic approval.
-Child turns and already-loaded resumes are excluded because their effective
-policy or configuration cannot be verified; cold resumes apply the supplied config.
-Native hooks report `permission_mode: default` for this granular policy.
+With external profiles, Full access accepts native tool approvals once for MCP
+servers injected by ACP during the current prompt, on any transport; changing mode
+revokes this. Only the launcher can inject a server, and a name that any Codex
+config layer or the adapter's own config also declares is never approved, so
+session config cannot borrow a launcher-injected name. All granular approval
+categories, including server-origin elicitations, stay disabled. Other modes
+retain their normal approval options. Native MCP settings and explicit per-tool
+approval rules receive no automatic approval. Child turns and already-loaded
+resumes are excluded because their effective policy or configuration cannot be
+verified; cold resumes apply the supplied config. Native hooks report
+`permission_mode: default` for this granular policy.
 
 ### Quick start
 

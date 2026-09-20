@@ -72,7 +72,7 @@ export async function forkSession(
         additionalDirectories,
         skippedMcpServers: sessionConfig.skippedMcpServers,
         ...(instructions ? {instructions} : {}),
-        fullAccessHttpMcpServers: sessionConfig.fullAccessHttpMcpServers,
+        fullAccessApprovedMcpServers: sessionConfig.fullAccessApprovedMcpServers,
     };
 }
 

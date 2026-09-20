@@ -705,7 +705,7 @@ export class CodexAcpClient {
         await this.refreshSkills(request.cwd, additionalDirectories);
 
         const sessionConfig = await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? []);
-        await this.restrictResumedHttpMcpServers(request.sessionId, sessionConfig);
+        await this.restrictResumedMcpServers(request.sessionId, sessionConfig);
         const response = await this.resumeThreadWithInstructions({
             excludeTurns: true,
             config: sessionConfig.config,
@@ -730,7 +730,7 @@ export class CodexAcpClient {
             additionalDirectories,
             skippedMcpServers: sessionConfig.skippedMcpServers,
             ...(instructions ? {instructions} : {}),
-            fullAccessHttpMcpServers: sessionConfig.fullAccessHttpMcpServers,
+            fullAccessApprovedMcpServers: sessionConfig.fullAccessApprovedMcpServers,
         }
     }
 
@@ -768,7 +768,7 @@ export class CodexAcpClient {
         await this.refreshSkills(request.cwd, additionalDirectories);
 
         const sessionConfig = await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? []);
-        await this.restrictResumedHttpMcpServers(request.sessionId, sessionConfig);
+        await this.restrictResumedMcpServers(request.sessionId, sessionConfig);
         const response = await this.resumeThreadWithInstructions({
             excludeTurns: true,
             config: sessionConfig.config,
@@ -816,7 +816,7 @@ export class CodexAcpClient {
             additionalDirectories,
             skippedMcpServers: sessionConfig.skippedMcpServers,
             ...(instructions ? {instructions} : {}),
-            fullAccessHttpMcpServers: sessionConfig.fullAccessHttpMcpServers,
+            fullAccessApprovedMcpServers: sessionConfig.fullAccessApprovedMcpServers,
         };
     }
 
@@ -877,7 +877,7 @@ export class CodexAcpClient {
             additionalDirectories,
             skippedMcpServers: sessionConfig.skippedMcpServers,
             ...(instructions ? {instructions} : {}),
-            fullAccessHttpMcpServers: sessionConfig.fullAccessHttpMcpServers,
+            fullAccessApprovedMcpServers: sessionConfig.fullAccessApprovedMcpServers,
         };
     }
 
@@ -1007,11 +1007,11 @@ export class CodexAcpClient {
         return {granular: {sandbox_approval: false, rules: false, skill_approval: false, request_permissions: false, mcp_elicitations: false}};
     }
 
-    private async restrictResumedHttpMcpServers(sessionId: string, prepared: SessionConfig): Promise<void> {
-        if (prepared.fullAccessHttpMcpServers.length === 0) return;
+    private async restrictResumedMcpServers(sessionId: string, prepared: SessionConfig): Promise<void> {
+        if (prepared.fullAccessApprovedMcpServers.length === 0) return;
         const loaded = await this.codexClient.threadLoadedList({});
-        // A loaded thread may ignore resume config, so its requested transport is not proof of its actual transport.
-        if (loaded.data.includes(sessionId) || loaded.nextCursor !== null) prepared.fullAccessHttpMcpServers = [];
+        // A loaded thread may ignore resume config, so the servers just declared are not proof of what it actually runs.
+        if (loaded.data.includes(sessionId) || loaded.nextCursor !== null) prepared.fullAccessApprovedMcpServers = [];
     }
 
     async deleteSession(sessionId: string): Promise<void> {
@@ -1153,7 +1153,7 @@ export class CodexAcpClient {
         };
         const configWithWorkspaceRoots = mergeSandboxWorkspaceWriteRoots(mergedConfig, additionalDirectories);
         if (mcpServers.length === 0) {
-            return {config: configWithWorkspaceRoots, skippedMcpServers: [], fullAccessHttpMcpServers: []};
+            return {config: configWithWorkspaceRoots, skippedMcpServers: [], fullAccessApprovedMcpServers: []};
         }
 
         const requestedServers = mcpServers.map(mcp => ({
@@ -1178,7 +1178,7 @@ export class CodexAcpClient {
             });
         }
         if (serversToConfigure.length === 0) {
-            return {config: configWithWorkspaceRoots, skippedMcpServers, fullAccessHttpMcpServers: []};
+            return {config: configWithWorkspaceRoots, skippedMcpServers, fullAccessApprovedMcpServers: []};
         }
 
         const configuredServers = Object.fromEntries(serversToConfigure.map(mcp => [mcp.name, toCodexMcpServerConfig(normalizeMcpServer(mcp.server))]));
@@ -1189,11 +1189,9 @@ export class CodexAcpClient {
                 "mcp_servers": configuredServers,
             },
             skippedMcpServers,
-            fullAccessHttpMcpServers: this.permissionProfileConfig
-                ? Object.entries(configuredServers)
-                    .filter(([name, server]) => typeof server["url"] === "string"
-                        && !existingNames.has(name) && !Object.hasOwn(inheritedServers, name))
-                    .map(([name]) => name)
+            fullAccessApprovedMcpServers: this.permissionProfileConfig
+                ? Object.keys(configuredServers)
+                    .filter(name => !existingNames.has(name) && !Object.hasOwn(inheritedServers, name))
                 : [],
         };
     }
@@ -1581,7 +1579,7 @@ export type JsonObject = { [key in string]?: JsonValue }
 export type SessionConfig = {
     config: JsonObject,
     skippedMcpServers: string[],
-    fullAccessHttpMcpServers: string[],
+    fullAccessApprovedMcpServers: string[],
 }
 
 function buildPromptItems(prompt: acp.ContentBlock[]): UserInput[] {
