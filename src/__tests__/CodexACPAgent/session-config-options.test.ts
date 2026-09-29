@@ -16,6 +16,7 @@ import {
     COLLABORATION_MODE_CONFIG_ID,
     PLAN_COLLABORATION_MODE,
 } from "../../CollaborationModeConfig";
+import type {PermissionProfileConfig} from "../../PermissionProfileConfig";
 
 const lowEffort: ReasoningEffortOption = {reasoningEffort: "low", description: "Fast"};
 const mediumEffort: ReasoningEffortOption = {reasoningEffort: "medium", description: "Balanced"};
@@ -46,8 +47,9 @@ async function createSession(
     availableModels: Array<Model>,
     clientCapabilities?: acp.ClientCapabilities,
     additionalDirectories: string[] = [],
+    permissionProfileConfig?: PermissionProfileConfig,
 ) {
-    const fixture = createCodexMockTestFixture(undefined, undefined, TEST_PERMISSION_PROFILE_CONFIG);
+    const fixture = createCodexMockTestFixture(undefined, undefined, permissionProfileConfig);
     const codexAcpAgent = fixture.getCodexAcpAgent();
     const codexAcpClient = fixture.getCodexAcpClient();
 
@@ -243,7 +245,9 @@ describe("Session config options", () => {
 
     it("changes the agent mode via setSessionConfigOption", async () => {
         const {fast} = buildModels();
-        const {codexAcpAgent, codexAcpClient} = await createSession("fast-model[medium]", [fast]);
+        const {codexAcpAgent, codexAcpClient} = await createSession(
+            "fast-model[medium]", [fast], undefined, [], TEST_PERMISSION_PROFILE_CONFIG,
+        );
         const update = vi.spyOn((codexAcpClient as any).codexClient, "threadSettingsUpdate").mockResolvedValue(undefined);
 
         const result = await codexAcpAgent.setSessionConfigOption({
