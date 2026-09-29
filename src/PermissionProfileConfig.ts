@@ -6,6 +6,7 @@ const permissionProfileConfigSchema = z.object({
     configOverrides: z.array(z.string().min(1)).min(1),
     modeProfiles: z.object({
         "read-only": z.string().min(1),
+        "workspace-write": z.string().min(1).optional(),
         agent: z.string().min(1),
         "agent-full-access": z.string().min(1),
     }),
@@ -35,7 +36,8 @@ export function readPermissionProfileConfig(
 }
 
 export function permissionProfileForMode(config: PermissionProfileConfig, modeId: string): string {
-    const profile = config.modeProfiles[modeId as keyof PermissionProfileConfig["modeProfiles"]];
+    const profile = config.modeProfiles[modeId as keyof PermissionProfileConfig["modeProfiles"]]
+        ?? (modeId === "workspace-write" ? config.modeProfiles.agent : undefined);
     if (!profile) throw new Error(`No permission profile configured for ACP mode ${modeId}`);
     return profile;
 }
