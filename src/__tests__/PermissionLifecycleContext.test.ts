@@ -261,7 +261,8 @@ describe("PermissionLifecycleContext", () => {
         const prompt = new PermissionLifecycleContext(sessionState()).beginPrompt();
         const handler = new CodexElicitationHandler(
             {request, notify} as unknown as AcpClientConnection,
-            prompt, null, cancellation.signal, () => approvedServers,
+            prompt, null, cancellation.signal,
+            new AcpToolCallRenderer(ClientCapabilities.DEFAULT), () => approvedServers,
         );
         const approval = {
             threadId: "thread", turnId: "turn-1", serverName: "server", mode: "form" as const,
@@ -299,9 +300,13 @@ describe("PermissionLifecycleContext", () => {
         const prompt = new PermissionLifecycleContext(sessionState()).beginPrompt();
         const elicitation = new CodexElicitationHandler(
             connection, prompt, {elicitation: {form: {}}}, undefined,
+            new AcpToolCallRenderer(ClientCapabilities.DEFAULT),
             () => fullAccess ? new Set(["server"]) : undefined,
         );
-        const approvals = new CodexApprovalHandler(connection, prompt, undefined, () => fullAccess);
+        const approvals = new CodexApprovalHandler(
+            connection, prompt, undefined,
+            new AcpToolCallRenderer(ClientCapabilities.DEFAULT), () => fullAccess,
+        );
         const input = {
             threadId: "thread", turnId: "turn-1", itemId: "mcp-deps-turn-1", isBlocking: true, autoResolutionMs: null,
             questions: [{id: "skill_mcp_dependency_install", header: "Install", question: "Install MCP dependency?",
