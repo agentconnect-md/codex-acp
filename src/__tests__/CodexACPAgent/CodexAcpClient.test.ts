@@ -1805,9 +1805,10 @@ describe('ACP server test', { timeout: 40_000 }, () => {
         const {mockFixture, sessionState, turnStartSpy} = setupPromptTestSession({
             cwd: "/workspace",
             agentMode: AgentMode.AgentFullAccess,
+            additionalDirectories: ["/workspace/extra"],
         }, TEST_PERMISSION_PROFILE_CONFIG);
-        const skillsRefresh = deferred<{data: []}>();
-        const listSkillsSpy = vi.spyOn(mockFixture.getCodexAppServerClient(), "listSkills")
+        const skillsRefresh = deferred<void>();
+        const skillsRootsSpy = vi.spyOn(mockFixture.getCodexAppServerClient(), "skillsExtraRootsSet")
             .mockReturnValue(skillsRefresh.promise);
         const settingsSpy = vi.spyOn(mockFixture.getCodexAppServerClient(), "threadSettingsUpdate")
             .mockResolvedValue(undefined);
@@ -1819,9 +1820,9 @@ describe('ACP server test', { timeout: 40_000 }, () => {
             sessionId: "session-id",
             prompt: [{type: "text", text: "Update the project"}],
         });
-        await vi.waitFor(() => expect(listSkillsSpy).toHaveBeenCalled());
+        await vi.waitFor(() => expect(skillsRootsSpy).toHaveBeenCalled());
         await agent.setSessionMode({sessionId: "session-id", modeId: AgentMode.ReadOnly.id});
-        skillsRefresh.resolve({data: []});
+        skillsRefresh.resolve();
 
         await expect(promptPromise).resolves.toMatchObject({stopReason: "cancelled"});
         expect(settingsSpy).toHaveBeenCalledWith(expect.objectContaining({approvalPolicy: "on-request"}));
