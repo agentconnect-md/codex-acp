@@ -20,7 +20,8 @@ Set `CODEX_PATH` to run a different Codex binary; versions other than the one sp
 A trusted runtime launcher may set `CODEX_ACP_PERMISSION_PROFILE_CONFIG` to a JSON
 object containing `configOverrides` for the long-lived Codex app-server and a
 `modeProfiles` mapping for the `read-only`, `agent`, and `agent-full-access` ACP
-modes. The adapter treats profile definitions as opaque operator policy.
+modes. `workspace-write` may select its own profile; otherwise it uses `agent`'s
+workspace profile. The adapter treats profile definitions as opaque operator policy.
 
 When configured, codex-acp selects the matching profile on thread start, resume,
 and mode changes, preserves ACP additional workspace roots, and omits the legacy
