@@ -38,7 +38,6 @@ export function startCodexConnection(
     options: StartCodexConnectionOptions = {},
 ): CodexConnection {
     const spawnEnv = env ?? process.env;
-    const args = ["app-server", ...configOverrides.flatMap((override) => ["-c", override])];
 
     let codex: ChildProcessWithoutNullStreams;
     if (codexPath) {
