@@ -9,7 +9,7 @@ export interface SupervisedProcessState {
     codexPath: string | undefined;
     /** The arguments the app-server starts with, such as the hook trust override; `app-server` alone when unset. */
     appServerStartupArgs?: string[];
-    env?: NodeJS.ProcessEnv;
+    env?: NodeJS.ProcessEnv | undefined;
     stderr: string;
 }
 

@@ -329,8 +329,8 @@ export interface CodexProcessState {
     config: JsonObject | undefined;
     appServerStartupArgs: string[];
     modelProvider: string | undefined;
-    env: NodeJS.ProcessEnv;
-    permissionProfileConfig: PermissionProfileConfig | undefined;
+    env?: NodeJS.ProcessEnv | undefined;
+    permissionProfileConfig?: PermissionProfileConfig | undefined;
     stderr: string;
     stderrProcess?: CodexConnection["process"];
     /** Owns the app-server child; created by `index.ts`, or by the server for a state without one. */
