@@ -11,6 +11,7 @@ function createTurn(id: string, status: "inProgress" | "completed" | "interrupte
         id,
         items: [],
         itemsView: "notLoaded" as const,
+        rootTurnId: null,
         status,
         error: null,
         startedAt: null,

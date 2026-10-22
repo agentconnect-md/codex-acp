@@ -660,6 +660,7 @@ function turnCompleted(threadId: string) {
                 id: "turn-id",
                 items: [],
                 itemsView: "notLoaded" as const,
+                rootTurnId: null,
                 status: "completed" as const,
                 error: null,
                 startedAt: null,
@@ -688,6 +689,8 @@ function childSpawned() {
 function childMaterialized() {
     return started({
         type: "subAgentActivity",
+        model: null,
+        reasoningEffort: null,
         id: "child-activity",
         kind: "started",
         agentThreadId: "child-1",
@@ -698,6 +701,8 @@ function childMaterialized() {
 function childInterrupted() {
     return started({
         type: "subAgentActivity",
+        model: null,
+        reasoningEffort: null,
         id: "child-activity-terminal",
         kind: "interrupted",
         agentThreadId: "child-1",

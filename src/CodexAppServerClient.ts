@@ -878,6 +878,7 @@ export class CodexAppServerClient {
                 itemsView: "notLoaded",
                 status: "interrupted",
                 error: null,
+                rootTurnId: null,
                 startedAt: null,
                 completedAt: null,
                 durationMs: null,

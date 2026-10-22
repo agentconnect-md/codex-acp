@@ -219,6 +219,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     completedAtMs: 0,
                     item: {
                         type: "subAgentActivity",
+                        model: null,
+                        reasoningEffort: null,
                         id: "call-spawn-weather",
                         kind: "started",
                         agentThreadId: "thread-paris",
@@ -261,6 +263,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     startedAtMs: 0,
                     item: {
                         type: "subAgentActivity",
+                        model: null,
+                        reasoningEffort: null,
                         id: "activity-started",
                         kind: "started",
                         agentThreadId: "child-1",
@@ -276,6 +280,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     completedAtMs: 0,
                     item: {
                         type: "subAgentActivity",
+                        model: null,
+                        reasoningEffort: null,
                         id: "activity-started",
                         kind: "started",
                         agentThreadId: "child-1",
@@ -291,6 +297,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     startedAtMs: 0,
                     item: {
                         type: "subAgentActivity",
+                        model: null,
+                        reasoningEffort: null,
                         id: "nested-started",
                         kind: "started",
                         agentThreadId: "grandchild-1",
@@ -315,6 +323,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     completedAtMs: 0,
                     item: {
                         type: "subAgentActivity",
+                        model: null,
+                        reasoningEffort: null,
                         id: "nested-interrupted",
                         kind: "interrupted",
                         agentThreadId: "grandchild-1",
@@ -330,6 +340,7 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                         id: "turn-child",
                         items: [],
                         itemsView: "notLoaded",
+                        rootTurnId: null,
                         status: "completed",
                         error: null,
                         startedAt: null,
@@ -346,6 +357,7 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                         id: "turn-1",
                         items: [],
                         itemsView: "notLoaded",
+                        rootTurnId: null,
                         status: "completed",
                         error: null,
                         startedAt: null,
@@ -418,6 +430,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     startedAtMs: 0,
                     item: {
                         type: "subAgentActivity",
+                        model: null,
+                        reasoningEffort: null,
                         id: "root-activity",
                         kind: "started",
                         agentThreadId: "root-activity-thread",
@@ -433,6 +447,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     completedAtMs: 0,
                     item: {
                         type: "subAgentActivity",
+                        model: null,
+                        reasoningEffort: null,
                         id: "root-activity",
                         kind: "started",
                         agentThreadId: "root-activity-thread",
@@ -502,6 +518,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     startedAtMs: 0,
                     item: {
                         type: "subAgentActivity",
+                        model: null,
+                        reasoningEffort: null,
                         id: "activity-weather",
                         kind: "started",
                         agentThreadId: "thread-paris",
@@ -620,6 +638,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     startedAtMs: 0,
                     item: {
                         type: "subAgentActivity",
+                        model: null,
+                        reasoningEffort: null,
                         id: "activity-child",
                         kind: "started",
                         agentThreadId: "child-1",
@@ -636,6 +656,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     startedAtMs: 0,
                     item: {
                         type: "subAgentActivity",
+                        model: null,
+                        reasoningEffort: null,
                         id: "activity-grandchild",
                         kind: "started",
                         agentThreadId: "grandchild-1",
@@ -700,6 +722,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     startedAtMs: 0,
                     item: {
                         type: "subAgentActivity",
+                        model: null,
+                        reasoningEffort: null,
                         id: "activity-child",
                         kind: "started",
                         agentThreadId: "child-1",
@@ -768,6 +792,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     startedAtMs: 0,
                     item: {
                         type: "subAgentActivity",
+                        model: null,
+                        reasoningEffort: null,
                         id: "activity-child",
                         kind: "started",
                         agentThreadId: "child-1",
@@ -927,6 +953,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                 startedAtMs: 0,
                 item: {
                     type: "subAgentActivity",
+                    model: null,
+                    reasoningEffort: null,
                     id: "activity-child",
                     kind: "started",
                     agentThreadId: "child-1",
@@ -942,6 +970,7 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                 turn: {
                     ...completedTurn,
                     itemsView: "notLoaded",
+                    rootTurnId: null,
                     startedAt: null,
                     completedAt: null,
                     durationMs: null,
@@ -990,6 +1019,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                 startedAtMs: 0,
                 item: {
                     type: "subAgentActivity",
+                    model: null,
+                    reasoningEffort: null,
                     id: "cancel-live-activity",
                     kind: "started",
                     agentThreadId: "cancel-live-child",
@@ -1004,6 +1035,7 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                 turn: {
                     ...completedTurn,
                     itemsView: "notLoaded",
+                    rootTurnId: null,
                     startedAt: null,
                     completedAt: null,
                     durationMs: null,
@@ -1084,6 +1116,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                 startedAtMs: 0,
                 item: {
                     type: "subAgentActivity",
+                    model: null,
+                    reasoningEffort: null,
                     id: "late-activity",
                     kind: "started",
                     agentThreadId: "child-without-activity",
@@ -1134,6 +1168,7 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     id: "first-child-turn",
                     items: [],
                     itemsView: "notLoaded",
+                    rootTurnId: null,
                     status: "failed",
                     error: null,
                     startedAt: null,
@@ -1170,6 +1205,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                 startedAtMs: 0,
                 item: {
                     type: "subAgentActivity",
+                    model: null,
+                    reasoningEffort: null,
                     id: "resumed-pre-activity",
                     kind: "started",
                     agentThreadId: "pre-activity-child",
@@ -1208,6 +1245,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                 startedAtMs: 0,
                 item: {
                     type: "subAgentActivity",
+                    model: null,
+                    reasoningEffort: null,
                     id: `activity-${child}`,
                     kind: "started",
                     agentThreadId: child,
@@ -1226,6 +1265,7 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                         id: "turn-child-a",
                         items: [],
                         itemsView: "notLoaded",
+                        rootTurnId: null,
                         status: "completed",
                         error: null,
                         startedAt: null,
@@ -1251,6 +1291,7 @@ describe("CodexEventHandler - collab agent tool call events", () => {
             id,
             items: [],
             itemsView: "notLoaded" as const,
+            rootTurnId: null,
             status,
             error: null,
             startedAt: null,
@@ -1282,6 +1323,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                 startedAtMs: 0,
                 item: {
                     type: "subAgentActivity",
+                    model: null,
+                    reasoningEffort: null,
                     id: "child-activity",
                     kind: "started",
                     agentThreadId: "child-turn-thread",
@@ -1373,6 +1416,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                 startedAtMs: 0,
                 item: {
                     type: "subAgentActivity",
+                    model: null,
+                    reasoningEffort: null,
                     id: "pending-activity",
                     kind: "started",
                     agentThreadId: "pending-child",
@@ -1398,6 +1443,7 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     id: `child-turn-${status}`,
                     items: [],
                     itemsView: "notLoaded",
+                    rootTurnId: null,
                     status,
                     error: null,
                     startedAt: null,
@@ -1415,6 +1461,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     startedAtMs: 0,
                     item: {
                         type: "subAgentActivity",
+                        model: null,
+                        reasoningEffort: null,
                         id: "resumable-activity",
                         kind: "started",
                         agentThreadId: "resumable-child",
@@ -1484,6 +1532,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                 startedAtMs: 0,
                 item: {
                     type: "subAgentActivity",
+                    model: null,
+                    reasoningEffort: null,
                     id: `activity-${threadId}`,
                     kind: "started",
                     agentThreadId: threadId,
@@ -1499,6 +1549,7 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     id: `turn-${threadId}`,
                     items: [],
                     itemsView: "notLoaded",
+                    rootTurnId: null,
                     status: "completed",
                     error: null,
                     startedAt: null,
@@ -1588,6 +1639,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                 startedAtMs: 0,
                 item: {
                     type: "subAgentActivity",
+                    model: null,
+                    reasoningEffort: null,
                     id: "bounded-activity",
                     kind: "started",
                     agentThreadId: "bounded-child",
@@ -1625,7 +1678,7 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                 params: {threadId: "large-child", turnId: "t", itemId: `i${index}`, delta: "x"},
             });
         }
-        await spawn({type: "subAgentActivity", id: "large-activity", kind: "started", agentThreadId: "large-child", agentPath: "/root/large"});
+        await spawn({type: "subAgentActivity", model: null, reasoningEffort: null, id: "large-activity", kind: "started", agentThreadId: "large-child", agentPath: "/root/large"});
 
         expect(router.takeBufferedNotifications()).toHaveLength(count);
     });
@@ -1659,7 +1712,7 @@ describe("CodexEventHandler - collab agent tool call events", () => {
             params: {
                 threadId: "dropped-child",
                 turn: {
-                    id: "child-turn", items: [], itemsView: "notLoaded", status: "completed", error: null,
+                    id: "child-turn", items: [], itemsView: "notLoaded", rootTurnId: null, status: "completed", error: null,
                     startedAt: null, completedAt: null, durationMs: null,
                 },
             },
@@ -1670,7 +1723,7 @@ describe("CodexEventHandler - collab agent tool call events", () => {
             .toEqual({parentThreadId: sessionId, task: "Dropped task"});
 
         expect(await rootItem({
-            type: "subAgentActivity", id: "dropped-activity", kind: "started",
+            type: "subAgentActivity", model: null, reasoningEffort: null, id: "dropped-activity", kind: "started",
             agentThreadId: "dropped-child", agentPath: "/root/dropped",
         })).toBe(true);
         await rootItem({
@@ -1698,6 +1751,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                 startedAtMs: 0,
                 item: {
                     type: "subAgentActivity",
+                    model: null,
+                    reasoningEffort: null,
                     id: "atomic-activity",
                     kind: "started",
                     agentThreadId: "atomic-child",
@@ -1714,6 +1769,7 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     id: "atomic-turn",
                     items: [],
                     itemsView: "notLoaded",
+                    rootTurnId: null,
                     status: "completed",
                     error: null,
                     startedAt: null,
@@ -1758,6 +1814,8 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                 startedAtMs: 0,
                 item: {
                     type: "subAgentActivity",
+                    model: null,
+                    reasoningEffort: null,
                     id: `activity-${childThreadId}`,
                     kind: "started",
                     agentThreadId: childThreadId,
@@ -1773,6 +1831,7 @@ describe("CodexEventHandler - collab agent tool call events", () => {
                     id: `${threadId}-turn`,
                     items: [],
                     itemsView: "notLoaded",
+                    rootTurnId: null,
                     status,
                     error: null,
                     startedAt: null,

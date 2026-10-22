@@ -300,7 +300,7 @@ describe("Session config options", () => {
         const appServer = fixture.getCodexAppServerClient();
         vi.spyOn(appServer, "listSkills").mockResolvedValue({data: []});
         const turn: Turn = {
-            id: "turn-id", items: [], itemsView: "notLoaded", status: "inProgress", error: null,
+            id: "turn-id", items: [], itemsView: "notLoaded", rootTurnId: null, status: "inProgress", error: null,
             startedAt: null, completedAt: null, durationMs: null,
         };
         const turnStart = vi.spyOn(appServer, "turnStart").mockResolvedValue({turn});

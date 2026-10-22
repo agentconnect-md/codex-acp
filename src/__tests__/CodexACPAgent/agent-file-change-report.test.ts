@@ -16,6 +16,7 @@ function createTurn(id: string, status: Turn["status"]): Turn {
         id,
         items: [],
         itemsView: "notLoaded",
+        rootTurnId: null,
         status,
         error: null,
         startedAt: null,

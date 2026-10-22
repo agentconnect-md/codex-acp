@@ -1062,6 +1062,7 @@ function createTurn(
         id,
         items: [],
         itemsView: "notLoaded" as const,
+        rootTurnId: null,
         status,
         error,
         startedAt: null,

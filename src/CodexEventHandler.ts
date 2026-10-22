@@ -145,15 +145,14 @@ function nextSessionFailureRevision(previous: SessionFailure | undefined, id: st
     return previous?.id === id ? previous.revision + 1 : 1;
 }
 
-type StringCodexErrorInfo = Extract<CodexErrorInfo, string>;
-type StructuredCodexErrorInfo = Exclude<CodexErrorInfo, string>;
 type KeysOfUnion<T> = T extends unknown ? keyof T : never;
-type StructuredCodexErrorKind = KeysOfUnion<StructuredCodexErrorInfo>;
+/** Drops the union's open `{ [key: string]: unknown }` member, which would widen the kinds to `string`. */
+type KnownStructuredCodexErrorInfo<T> = T extends unknown ? (string extends keyof T ? never : T) : never;
+type StructuredCodexErrorKind = KeysOfUnion<KnownStructuredCodexErrorInfo<Exclude<CodexErrorInfo, string>>>;
 
 /**
- * Exhaustive against the generated app-server union: a schema update cannot silently fall through
- * to provider_error. The runtime lookup still has a fallback for a newer app-server talking to an
- * older codex-acp build.
+ * The generated union ends in an open `string`, which absorbs its literals, so only the structured
+ * kinds stay exhaustive. An unlisted string, from a newer app-server, falls back to provider_error.
  */
 const STRING_CODEX_ERROR_CATEGORIES = {
     contextWindowExceeded: "context_exhausted",
@@ -171,7 +170,7 @@ const STRING_CODEX_ERROR_CATEGORIES = {
     threadRollbackFailed: "provider_error",
     sandboxError: "provider_error",
     other: "provider_error",
-} satisfies Record<StringCodexErrorInfo, CodexFailureKind>;
+} satisfies Record<string, CodexFailureKind>;
 
 const STRUCTURED_CODEX_ERROR_CATEGORIES = {
     httpConnectionFailed: "transport_lost",
@@ -633,6 +632,8 @@ export class CodexEventHandler {
             case "thread/deleted":
             case "thread/reverted":
             case "thread/queue/changed":
+            case "thread/readState/changed":
+            case "thread/prediction/updated":
             case "project/changed":
             case "thread/project/updated":
             case "thread/environment/connected":
@@ -1117,7 +1118,9 @@ export class CodexEventHandler {
         if (this.isAuthenticationRequiredError(error)) return "auth_required";
         if (this.getHttpStatusCode(error) === 429) return "rate_limited";
         if (typeof error === "string") {
-            return STRING_CODEX_ERROR_CATEGORIES[error] ?? "provider_error";
+            return Object.hasOwn(STRING_CODEX_ERROR_CATEGORIES, error)
+                ? STRING_CODEX_ERROR_CATEGORIES[error as keyof typeof STRING_CODEX_ERROR_CATEGORIES]
+                : "provider_error";
         }
         if (error !== null) {
             for (const kind of Object.keys(STRUCTURED_CODEX_ERROR_CATEGORIES) as StructuredCodexErrorKind[]) {

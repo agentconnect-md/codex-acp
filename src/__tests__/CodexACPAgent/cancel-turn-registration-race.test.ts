@@ -92,6 +92,7 @@ async function startPrompt(): Promise<{
         id: turnId,
         items: [],
         itemsView: "notLoaded" as const,
+        rootTurnId: null,
         status: "inProgress" as const,
         error: null,
         startedAt: null,

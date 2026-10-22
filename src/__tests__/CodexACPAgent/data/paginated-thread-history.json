@@ -64,6 +64,7 @@
           }
         ],
         "itemsView": "full",
+        "rootTurnId": null,
         "status": "completed",
         "error": null,
         "startedAt": null,
@@ -96,6 +97,7 @@
           }
         ],
         "itemsView": "full",
+        "rootTurnId": null,
         "status": "completed",
         "error": null,
         "startedAt": null,
@@ -128,6 +130,7 @@
           }
         ],
         "itemsView": "full",
+        "rootTurnId": null,
         "status": "completed",
         "error": null,
         "startedAt": null,

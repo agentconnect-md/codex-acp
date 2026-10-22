@@ -15,6 +15,7 @@ type TurnCompletion = {
         id: string;
         items: never[];
         itemsView: "notLoaded";
+        rootTurnId: string | null;
         status: "completed" | "failed";
         error: null | {
             message: string;
@@ -33,6 +34,7 @@ type TurnStartResponse = {
         id: string;
         items: never[];
         itemsView: "notLoaded";
+        rootTurnId: string | null;
         status: "inProgress";
         error: null;
         startedAt: null;
@@ -87,6 +89,7 @@ describe("CodexACPAgent - plan review", () => {
                     id: "plan-turn",
                     items: [],
                     itemsView: "notLoaded",
+                    rootTurnId: null,
                     status: "inProgress",
                     error: null,
                     startedAt: null,
@@ -99,6 +102,7 @@ describe("CodexACPAgent - plan review", () => {
                     id: "implementation-turn",
                     items: [],
                     itemsView: "notLoaded",
+                    rootTurnId: null,
                     status: "inProgress",
                     error: null,
                     startedAt: null,
@@ -145,6 +149,7 @@ describe("CodexACPAgent - plan review", () => {
                 id: "plan-turn",
                 items: [],
                 itemsView: "notLoaded",
+                rootTurnId: null,
                 status: "completed",
                 error: null,
                 startedAt: null,
@@ -220,6 +225,7 @@ describe("CodexACPAgent - plan review", () => {
                 id: "implementation-turn",
                 items: [],
                 itemsView: "notLoaded",
+                rootTurnId: null,
                 status: "completed",
                 error: null,
                 startedAt: null,
@@ -338,6 +344,7 @@ describe("CodexACPAgent - plan review", () => {
                 id: "implementation-turn",
                 items: [],
                 itemsView: "notLoaded",
+                rootTurnId: null,
                 status: "completed",
                 error: null,
                 startedAt: null,
@@ -385,6 +392,7 @@ describe("CodexACPAgent - plan review", () => {
                 id: "implementation-turn",
                 items: [],
                 itemsView: "notLoaded",
+                rootTurnId: null,
                 status: "failed",
                 error: implementationError,
                 startedAt: null,
@@ -446,6 +454,7 @@ describe("CodexACPAgent - plan review", () => {
                 id: "implementation-turn",
                 items: [],
                 itemsView: "notLoaded",
+                rootTurnId: null,
                 status: "inProgress",
                 error: null,
                 startedAt: null,
@@ -459,6 +468,7 @@ describe("CodexACPAgent - plan review", () => {
                 id: "implementation-turn",
                 items: [],
                 itemsView: "notLoaded",
+                rootTurnId: null,
                 status: "completed",
                 error: null,
                 startedAt: null,
