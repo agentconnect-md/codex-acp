@@ -15,6 +15,33 @@ Set `CODEX_PATH` to run a different Codex binary; versions other than the one sp
 - `CODEX_ACP_APP_SERVER_CRASH_LIMIT` - how many crashes of the Codex app-server in the crash window stop its automatic restart (default `5`).
 - `CODEX_ACP_APP_SERVER_CRASH_WINDOW_MS` - the crash window in milliseconds (default `300000`, 5 minutes).
 
+### External permission profiles
+
+A trusted runtime launcher may set `CODEX_ACP_PERMISSION_PROFILE_CONFIG` to a JSON
+object containing `configOverrides` for the long-lived Codex app-server and a
+`modeProfiles` mapping for the `read-only`, `agent`, and `agent-full-access` ACP
+modes. `workspace-write` may select its own profile; otherwise it uses `agent`'s
+workspace profile. The adapter treats profile definitions as opaque operator policy.
+
+When configured, codex-acp selects the matching profile on thread start, resume,
+and mode changes, preserves ACP additional workspace roots, and omits the legacy
+per-turn `sandboxPolicy` that would otherwise override the selected profile. The
+launch variable is removed from the Codex child environment after it is parsed.
+Malformed or incomplete mappings fail startup instead of falling back to legacy
+sandbox behavior.
+
+With external profiles, Full access accepts native tool approvals once for MCP
+servers injected by ACP during the current prompt, on any transport; changing mode
+revokes this. Only the launcher can inject a server, and a name that any Codex
+config layer or the adapter's own config also declares is never approved, so
+session config cannot borrow a launcher-injected name. All granular approval
+categories, including server-origin elicitations, stay disabled. Other modes
+retain their normal approval options. Native MCP settings and explicit per-tool
+approval rules receive no automatic approval. Child turns and already-loaded
+resumes are excluded because their effective policy or configuration cannot be
+verified; cold resumes apply the supplied config. Native hooks report
+`permission_mode: default` for this granular policy.
+
 ### Quick start
 
 #### Develop on Windows?

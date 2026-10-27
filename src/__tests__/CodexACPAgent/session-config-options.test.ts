@@ -1,6 +1,10 @@
 import {afterEach, describe, expect, it, vi} from "vitest";
 import * as acp from "@agentclientprotocol/sdk/unstable";
-import {createCodexMockTestFixture, createTestModel} from "../acp-test-utils";
+import {
+    createCodexMockTestFixture,
+    createTestModel,
+    TEST_PERMISSION_PROFILE_CONFIG,
+} from "../acp-test-utils";
 import {AgentMode, MODE_CONFIG_ID} from "../../AgentMode";
 import {
     MODEL_CONFIG_ID,
@@ -12,6 +16,7 @@ import {
     COLLABORATION_MODE_CONFIG_ID,
     PLAN_COLLABORATION_MODE,
 } from "../../CollaborationModeConfig";
+import type {PermissionProfileConfig} from "../../PermissionProfileConfig";
 
 const lowEffort: ReasoningEffortOption = {reasoningEffort: "low", description: "Fast"};
 const mediumEffort: ReasoningEffortOption = {reasoningEffort: "medium", description: "Balanced"};
@@ -42,8 +47,9 @@ async function createSession(
     availableModels: Array<Model>,
     clientCapabilities?: acp.ClientCapabilities,
     additionalDirectories: string[] = [],
+    permissionProfileConfig?: PermissionProfileConfig,
 ) {
-    const fixture = createCodexMockTestFixture();
+    const fixture = createCodexMockTestFixture(undefined, undefined, permissionProfileConfig);
     const codexAcpAgent = fixture.getCodexAcpAgent();
     const codexAcpClient = fixture.getCodexAcpClient();
 
@@ -239,17 +245,25 @@ describe("Session config options", () => {
 
     it("changes the agent mode via setSessionConfigOption", async () => {
         const {fast} = buildModels();
-        const {codexAcpAgent} = await createSession("fast-model[medium]", [fast]);
+        const {codexAcpAgent, codexAcpClient} = await createSession(
+            "fast-model[medium]", [fast], undefined, [], TEST_PERMISSION_PROFILE_CONFIG,
+        );
+        const update = vi.spyOn((codexAcpClient as any).codexClient, "threadSettingsUpdate").mockResolvedValue(undefined);
 
         const result = await codexAcpAgent.setSessionConfigOption({
             sessionId: "session-id",
             configId: MODE_CONFIG_ID,
-            value: AgentMode.Agent.id,
+            value: AgentMode.ReadOnly.id,
         });
 
-        expect(codexAcpAgent.getSessionState("session-id").agentMode).toBe(AgentMode.Agent);
+        expect(codexAcpAgent.getSessionState("session-id").agentMode).toBe(AgentMode.ReadOnly);
+        expect(update).toHaveBeenCalledWith({
+            threadId: "session-id",
+            approvalPolicy: "on-request",
+            permissions: "external-read-only",
+        });
         const modeOption = result.configOptions?.find(o => o.id === MODE_CONFIG_ID);
-        expect((modeOption as any).currentValue).toBe(AgentMode.Agent.id);
+        expect((modeOption as any).currentValue).toBe(AgentMode.ReadOnly.id);
     });
 
     it.each([
