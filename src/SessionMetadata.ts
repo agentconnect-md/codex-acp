@@ -14,6 +14,7 @@ export type SessionMetadata = {
     additionalDirectories: string[],
     skippedMcpServers?: string[],
     instructions?: SessionInstructions,
+    fullAccessApprovedMcpServers?: string[],
 }
 
 export type SessionMetadataWithThread = SessionMetadata & {

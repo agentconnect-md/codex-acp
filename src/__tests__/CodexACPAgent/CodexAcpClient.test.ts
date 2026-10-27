@@ -9,8 +9,10 @@ import {
     createTestFixture,
     createTestModel,
     createTestSessionState,
-    type TestFixture,
     deferred,
+    setupPromptTestSession,
+    TEST_PERMISSION_PROFILE_CONFIG,
+    type TestFixture,
 } from "../acp-test-utils";
 import type {ServerNotification} from "../../app-server";
 import type {SessionState} from "../../CodexAcpServer";
@@ -609,8 +611,40 @@ describe('ACP server test', { timeout: 40_000 }, () => {
         });
     });
 
+    it('selects external permission profiles without losing workspace roots', async () => {
+        const mockFixture = createCodexMockTestFixture(undefined, undefined, TEST_PERMISSION_PROFILE_CONFIG);
+        const codexAcpClient = mockFixture.getCodexAcpClient();
+        const codexAppServerClient = mockFixture.getCodexAppServerClient();
+
+        vi.spyOn(codexAppServerClient, "skillsExtraRootsSet").mockResolvedValue(undefined);
+        vi.spyOn(codexAppServerClient, "listSkills").mockResolvedValue({data: []});
+        const threadStartSpy = vi.spyOn(codexAppServerClient, "threadStart").mockResolvedValue({
+            thread: {id: "thread-id"} as any,
+            model: "gpt-5",
+            reasoningEffort: "medium",
+            serviceTier: null,
+        } as any);
+        vi.spyOn(codexAppServerClient, "listModels").mockResolvedValue({
+            data: [createTestModel({id: "gpt-5"})],
+            nextCursor: null,
+        });
+
+        const session = await codexAcpClient.newSession({
+            cwd: "/workspace",
+            additionalDirectories: ["/workspace/extra"],
+            mcpServers: [],
+        });
+
+        const request = threadStartSpy.mock.calls[0]![0];
+        expect(request).toMatchObject({
+            approvalPolicy: "on-request",
+            permissions: "external-agent",
+            runtimeWorkspaceRoots: ["/workspace", "/workspace/extra"],
+        });
+    });
+
     it('applies ACP additional directories to resumed and loaded sessions explicitly', async () => {
-        const mockFixture = createCodexMockTestFixture();
+        const mockFixture = createCodexMockTestFixture(undefined, undefined, TEST_PERMISSION_PROFILE_CONFIG);
         const codexAcpClient = mockFixture.getCodexAcpClient();
         const codexAppServerClient = mockFixture.getCodexAppServerClient();
 
@@ -645,6 +679,14 @@ describe('ACP server test', { timeout: 40_000 }, () => {
         expect(threadResumeSpy.mock.calls.every(([params]) => params.excludeTurns === true)).toBe(true);
         expect(resumed.additionalDirectories).toEqual(["/workspace/resume-extra"]);
         expect(loaded.additionalDirectories).toEqual(["/workspace/load-extra"]);
+        expect(threadResumeSpy.mock.calls[0]![0]).toMatchObject({
+            permissions: "external-agent",
+            runtimeWorkspaceRoots: ["/workspace", "/workspace/resume-extra"],
+        });
+        expect(threadResumeSpy.mock.calls[1]![0]).toMatchObject({
+            permissions: "external-agent",
+            runtimeWorkspaceRoots: ["/workspace", "/workspace/load-extra"],
+        });
         expect(threadResumeSpy.mock.calls[0]![0].config?.["projects"]).toEqual({
             "/workspace": {trust_level: "trusted"},
             "/workspace/resume-extra": {trust_level: "trusted"},
@@ -1031,6 +1073,50 @@ describe('ACP server test', { timeout: 40_000 }, () => {
                 http_headers: {Authorization: "Bearer token"},
             },
         });
+    });
+
+    it('approves every launcher-injected MCP server under Full access unless a config layer declares its name', async () => {
+        const mockFixture = createCodexMockTestFixture(undefined, undefined, TEST_PERMISSION_PROFILE_CONFIG);
+        const codexAcpClient = mockFixture.getCodexAcpClient();
+        const codexAppServerClient = mockFixture.getCodexAppServerClient();
+
+        vi.spyOn(codexAppServerClient, "listSkills").mockResolvedValue({data: []});
+        vi.spyOn(codexAppServerClient, "configRead").mockResolvedValue({
+            config: {mcp_servers: {shadowed: {command: "npx", args: ["shadowed"]}}},
+        } as any);
+        vi.spyOn(codexAppServerClient, "threadStart").mockResolvedValue({
+            thread: {id: "thread-id"} as any,
+            model: "gpt-5",
+            reasoningEffort: "medium",
+            serviceTier: null,
+        } as any);
+        vi.spyOn(codexAppServerClient, "listModels").mockResolvedValue({
+            data: [createTestModel({id: "gpt-5"})],
+            nextCursor: null,
+        });
+
+        const metadata = await codexAcpClient.newSession({
+            cwd: "/workspace",
+            mcpServers: [{
+                name: "bridge",
+                command: "node",
+                args: ["bridge"],
+                env: [{name: "TOKEN", value: "secret"}],
+            }, {
+                type: "http",
+                name: "assigned",
+                url: "https://example.com/mcp",
+                headers: [],
+            }, {
+                name: "shadowed",
+                command: "npx",
+                args: ["shadowed"],
+                env: [],
+            }],
+        });
+
+        // The stdio bridge is approved like the HTTP server; a name a config layer declares is not, whatever its transport.
+        expect(metadata.fullAccessApprovedMcpServers).toEqual(["bridge", "assigned"]);
     });
 
     it('waits for typed mcp startup status updates and returns terminal states', async () => {
@@ -1452,6 +1538,24 @@ describe('ACP server test', { timeout: 40_000 }, () => {
         expect(turnStartSpy.mock.calls[0]![0].approvalsReviewer).toBe("auto_review");
     });
 
+    it('keeps the external profile sticky instead of sending a legacy turn sandbox policy', async () => {
+        const {mockFixture, turnStartSpy} = setupPromptTestSession({
+            cwd: "/workspace",
+            additionalDirectories: ["/workspace/extra"],
+        }, TEST_PERMISSION_PROFILE_CONFIG);
+
+        await mockFixture.getCodexAcpAgent().prompt({
+            sessionId: "session-id",
+            prompt: [{type: "text", text: "Hello"}],
+        });
+
+        expect(turnStartSpy).toHaveBeenCalledWith(expect.objectContaining({
+            runtimeWorkspaceRoots: ["/workspace", "/workspace/extra"],
+        }));
+        expect(turnStartSpy.mock.calls[0]![0]).not.toHaveProperty("permissions");
+        expect(turnStartSpy.mock.calls[0]![0]).not.toHaveProperty("sandboxPolicy");
+    });
+
     function loadNotifications(){
         //TODO collect logs form dev run and then load them from file to speedup
         const serverNotifications: ServerNotification[] = [
@@ -1841,6 +1945,34 @@ describe('ACP server test', { timeout: 40_000 }, () => {
 
         skillsRefresh.resolve();
         await flushAsyncWork();
+        expect(turnStartSpy).not.toHaveBeenCalled();
+    });
+
+    it('cancels a pending Full access prompt after a mode downgrade', async () => {
+        const {mockFixture, sessionState, turnStartSpy} = setupPromptTestSession({
+            cwd: "/workspace",
+            agentMode: AgentMode.AgentFullAccess,
+            additionalDirectories: ["/workspace/extra"],
+        }, TEST_PERMISSION_PROFILE_CONFIG);
+        const skillsRefresh = deferred<void>();
+        const skillsRootsSpy = vi.spyOn(mockFixture.getCodexAppServerClient(), "skillsExtraRootsSet")
+            .mockReturnValue(skillsRefresh.promise);
+        const settingsSpy = vi.spyOn(mockFixture.getCodexAppServerClient(), "threadSettingsUpdate")
+            .mockResolvedValue(undefined);
+        const agent = mockFixture.getCodexAcpAgent();
+        // @ts-expect-error - registering local session state for the ACP mode change path
+        agent.sessions.set(sessionState.sessionId, sessionState);
+
+        const promptPromise = agent.prompt({
+            sessionId: "session-id",
+            prompt: [{type: "text", text: "Update the project"}],
+        });
+        await vi.waitFor(() => expect(skillsRootsSpy).toHaveBeenCalled());
+        await agent.setSessionMode({sessionId: "session-id", modeId: AgentMode.ReadOnly.id});
+        skillsRefresh.resolve();
+
+        await expect(promptPromise).resolves.toMatchObject({stopReason: "cancelled"});
+        expect(settingsSpy).toHaveBeenCalledWith(expect.objectContaining({approvalPolicy: "on-request"}));
         expect(turnStartSpy).not.toHaveBeenCalled();
     });
 
