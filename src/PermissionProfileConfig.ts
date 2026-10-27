@@ -14,12 +14,7 @@ const permissionProfileConfigSchema = z.object({
 
 export type PermissionProfileConfig = z.infer<typeof permissionProfileConfigSchema>;
 
-/**
- * Read an operator-owned, launch-wide permission profile mapping. The adapter
- * deliberately treats profile definitions as opaque Codex configuration: the
- * trusted launcher owns policy construction, while codex-acp only selects the
- * profile matching the active ACP mode.
- */
+// The trusted launcher defines profiles; the adapter only selects the profile for the active mode.
 export function readPermissionProfileConfig(
     env: NodeJS.ProcessEnv = process.env,
 ): PermissionProfileConfig | undefined {

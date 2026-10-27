@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - 'agentconnect-v*'
+  pull_request:
+    branches:
+      - 'agentconnect/rebase-v*'
 
 permissions: {}
 
@@ -21,9 +24,11 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:integration -- --maxWorkers=1
       - run: npm run build
 
   publish:
+    if: github.event_name == 'push'
     needs: verify
     runs-on: ubuntu-latest
     environment: release
