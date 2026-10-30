@@ -36,6 +36,7 @@ import {
 } from "./CodexThreadErrors";
 import {requiresLogout} from "./CodexErrorExplanations";
 import {type CodexConnection} from "./CodexJsonRpcConnection";
+import type {PermissionProfileConfig} from "./PermissionProfileConfig";
 import {AppServerRecovery, recoveryLimitsFromEnv} from "./app-server-recovery/AppServerRecovery";
 import {
     CODEX_PROCESS_EXITED_ERROR_CODE,
@@ -250,6 +251,8 @@ export interface SessionState extends SessionIndexTitleState {
     supportedInputModalities: Array<InputModality>,
     agentMode: AgentMode,
     availableAgentModes: AgentMode[],
+    permissionModeRevision?: number;
+    fullAccessApprovedMcpServers?: string[];
     collaborationMode: ModeKind,
     /** The active turn: its completion, errors and stop reason are matched against this id. */
     currentTurnId: string | null;
@@ -484,6 +487,8 @@ export interface CodexProcessState {
     /** The provider routing of the next app-server; see `CodexAcpClient.providerStartupConfig`. */
     providerStartupConfig?: ProviderStartupConfig;
     modelProvider: string | undefined;
+    env?: NodeJS.ProcessEnv | undefined;
+    permissionProfileConfig?: PermissionProfileConfig | undefined;
     stderr: string;
     stderrProcess?: CodexConnection["process"];
     /** Owns the app-server child; created by `index.ts`, or by the server for a state without one. */
@@ -1395,6 +1400,7 @@ export class CodexAcpServer {
                 sessionMetadata.activePermissionProfileId,
             ),
             availableAgentModes,
+            fullAccessApprovedMcpServers: sessionMetadata.fullAccessApprovedMcpServers ?? [],
             collaborationMode: sessionMetadata.collaborationMode,
             currentTurnId: null,
             interruptTurnId: null,
@@ -2429,6 +2435,7 @@ export class CodexAcpServer {
                         resumed = onSubscribed === undefined
                             ? await replacement.resumeSession(request, undefined, session.instructions)
                             : await replacement.resumeSession(request, onSubscribed, session.instructions);
+                        session.fullAccessApprovedMcpServers = resumed.fullAccessApprovedMcpServers ?? [];
                         return resumed;
                     };
                     await (this.recovery?.resumeForReplacement(session, replacementGeneration, replacement, resume) ?? resume());
@@ -2587,6 +2594,7 @@ export class CodexAcpServer {
                 }, onSubscribed, session.instructions);
                 // A session the provider restart failed to resume gets the models of the routing here.
                 await this.applyResumedModels(session, client, metadata);
+                session.fullAccessApprovedMcpServers = metadata.fullAccessApprovedMcpServers ?? [];
                 return {collaborationMode: metadata.collaborationMode};
             },
             applyCollaborationMode: (session, client) =>
@@ -2864,7 +2872,7 @@ export class CodexAcpServer {
                     this.applyFastModeChange(sessionState, params);
                     break;
                 case MODE_CONFIG_ID:
-                    this.applyModeChange(sessionState, this.stringConfigValue(params));
+                    await this.applyModeChange(sessionState, this.stringConfigValue(params));
                     break;
                 case COLLABORATION_MODE_CONFIG_ID:
                     await this.applyCollaborationModeChange(sessionState, this.stringConfigValue(params));
@@ -2913,11 +2921,16 @@ export class CodexAcpServer {
         return params.value;
     }
 
-    private applyModeChange(sessionState: SessionState, value: string): void {
+    private async applyModeChange(sessionState: SessionState, value: string): Promise<void> {
         const newMode = AgentMode.find(value, sessionState.availableAgentModes);
         if (!newMode) {
             throw RequestError.invalidParams();
         }
+        sessionState.permissionModeRevision = (sessionState.permissionModeRevision ?? 0) + 1;
+        await this.codexAcpClient.setAgentMode(
+            sessionState.sessionId,
+            newMode,
+        );
         sessionState.agentMode = newMode;
     }
 
@@ -3628,6 +3641,7 @@ export class CodexAcpServer {
                 sessionMetadata.activePermissionProfileId,
             ),
             availableAgentModes,
+            fullAccessApprovedMcpServers: sessionMetadata.fullAccessApprovedMcpServers ?? [],
             collaborationMode: sessionMetadata.collaborationMode,
             currentTurnId: null,
             interruptTurnId: null,
@@ -5003,11 +5017,18 @@ export class CodexAcpServer {
             const permissionLifecycle = this.permissionLifecycleContext(sessionState);
             const permissionContext = permissionLifecycle.beginPrompt();
             const toolCallRenderer = new AcpToolCallRenderer(this.capabilities);
+            let promptAgentMode: AgentMode | undefined;
+            let permissionModeRevision: number | undefined;
+            const approvedServers = new Set(sessionState.fullAccessApprovedMcpServers);
+            const noApprovedServers = new Set<string>();
+            let mcpApprovalTurnId: string | null = null;
+            const isProtectedFullAccess = () => this.codexAcpClient.isProtectedFullAccess(promptAgentMode ?? sessionState.agentMode);
             const approvalHandler = new CodexApprovalHandler(
                 interactionConnection,
                 permissionContext,
                 activePrompt.interactionSignal,
                 toolCallRenderer,
+                isProtectedFullAccess,
             );
             const elicitationHandler = new CodexElicitationHandler(
                 interactionConnection,
@@ -5015,6 +5036,13 @@ export class CodexAcpServer {
                 this.clientCapabilities,
                 activePrompt.interactionSignal,
                 toolCallRenderer,
+                request => {
+                    if (!isProtectedFullAccess()) return undefined;
+                    return mcpApprovalTurnId !== null && request.turnId === mcpApprovalTurnId
+                        && sessionState.agentMode.kind === "full_access"
+                        && sessionState.permissionModeRevision === permissionModeRevision
+                        ? approvedServers : noApprovedServers;
+                },
             );
             promptElicitations = elicitationHandler;
             const observeInteraction = async (event: ServerNotification): Promise<void> => {
@@ -5190,6 +5218,8 @@ export class CodexAcpServer {
                 throw RequestError.invalidRequest("The current model does not support image input");
             }
             const agentMode = sessionState.agentMode;
+            promptAgentMode = agentMode;
+            permissionModeRevision = sessionState.permissionModeRevision;
             const serviceTier = resolveFastServiceTier(
                 sessionState.fastModeEnabled,
                 sessionState.currentModelSupportsFast,
@@ -5210,6 +5240,7 @@ export class CodexAcpServer {
                     sessionState.cwd,
                     sessionState.additionalDirectories,
                     (turnId) => {
+                        mcpApprovalTurnId = turnId;
                         const turn = {threadId: params.sessionId, turnId};
                         activePrompt.currentTurn = turn;
                         insertion?.onTurnStarted?.(turn);
@@ -5224,7 +5255,8 @@ export class CodexAcpServer {
                         }
                         onTurnStarted?.();
                     },
-                    () => this.promptShouldStop(params.sessionId, activePrompt),
+                    () => this.promptShouldStop(params.sessionId, activePrompt)
+                        || sessionState.permissionModeRevision !== permissionModeRevision,
                     insertion?.clientUserMessageId,
                 ));
             void sendPromptPromise.catch((err) => {
@@ -5330,6 +5362,7 @@ export class CodexAcpServer {
                             sessionState.cwd,
                             sessionState.additionalDirectories,
                             (turnId) => {
+                                mcpApprovalTurnId = turnId;
                                 const turn = {threadId: params.sessionId, turnId};
                                 activePrompt.currentTurn = turn;
                                 if (this.promptShouldStop(params.sessionId, activePrompt)) {
@@ -5342,7 +5375,8 @@ export class CodexAcpServer {
                                 recoverableSessionFailure = sessionState.sessionFailure;
                                 promptNotificationsActive = true;
                             },
-                            () => this.promptShouldStop(params.sessionId, activePrompt),
+                            () => this.promptShouldStop(params.sessionId, activePrompt)
+                                || sessionState.permissionModeRevision !== permissionModeRevision,
                             implementationClientUserMessageId,
                         ),
                     );

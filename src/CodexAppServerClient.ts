@@ -12,6 +12,7 @@ import type {
 } from "./app-server";
 import type {
     ActivePermissionProfile,
+    AskForApproval,
     CancelLoginAccountParams,
     CancelLoginAccountResponse,
     ConfigReadParams,
@@ -1390,7 +1391,8 @@ type DistributiveOmit<T, K extends keyof any> = T extends any
 
 export interface ExperimentalThreadSettingsUpdateParams {
     threadId: string;
-    collaborationMode: {
+    approvalPolicy?: AskForApproval;
+    collaborationMode?: {
         mode: "default" | "plan";
         settings: {
             model: string;
@@ -1398,6 +1400,7 @@ export interface ExperimentalThreadSettingsUpdateParams {
             developer_instructions: string | null;
         };
     };
+    permissions?: string;
 }
 
 // These fields are generated with `generate-ts --experimental`; `npm run generate-types` uses the stable schema.
