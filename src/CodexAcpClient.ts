@@ -1282,7 +1282,8 @@ export class CodexAcpClient {
             profiles.push(...(response?.data ?? []));
             cursor = response?.nextCursor ?? null;
         } while (cursor !== null);
-        return profiles;
+        const internalIds = new Set(Object.values(this.permissionProfileConfig?.modeProfiles ?? {}));
+        return profiles.filter(profile => !internalIds.has(profile.id));
     }
 
     getModelProvider(): string | null {
@@ -1485,7 +1486,7 @@ export class CodexAcpClient {
         await this.codexClient.threadSettingsUpdate({
             threadId: sessionId,
             approvalPolicy: this.approvalPolicyForMode(agentMode),
-            permissions: permissionProfileForMode(config, agentMode.id),
+            permissions: agentMode.permissionProfileId ?? permissionProfileForMode(config, agentMode.id),
         });
     }
 
