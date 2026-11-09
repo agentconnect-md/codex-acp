@@ -1457,7 +1457,8 @@ export class CodexAcpClient {
         if (shouldCancel?.()) {
             return null;
         }
-        const permissionProfileId = agentMode.permissionProfileId;
+        const permissionProfileId = agentMode.permissionProfileId
+            ?? (this.permissionProfileConfig ? permissionProfileForMode(this.permissionProfileConfig, agentMode.id) : null);
         return await this.codexClient.runTurn({
             threadId: request.sessionId,
             input: input,
