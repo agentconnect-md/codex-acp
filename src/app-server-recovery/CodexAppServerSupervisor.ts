@@ -12,6 +12,7 @@ export interface SupervisedProcessState {
     appServerStartupArgs?: string[];
     /** The provider routing that the next app-server starts with; none when unset. */
     providerStartupConfig?: ProviderStartupConfig;
+    /** The environment every app-server starts with, before the provider additions; the agent's own when unset. */
     env?: NodeJS.ProcessEnv | undefined;
     stderr: string;
 }
@@ -106,7 +107,7 @@ export class CodexAppServerSupervisor {
             env: Record<string, string>,
         ) => CodexConnection =
             (codexPath, appServerStartupArgs, env) =>
-                startCodexConnection(codexPath, {...process.env, ...env}, appServerStartupArgs, {disposeOnExit: false}),
+                startCodexConnection(codexPath, {...(state.env ?? process.env), ...env}, appServerStartupArgs, {disposeOnExit: false}),
         timings: Partial<SupervisorTimings> = {},
         private readonly now: () => number = Date.now,
     ) {
