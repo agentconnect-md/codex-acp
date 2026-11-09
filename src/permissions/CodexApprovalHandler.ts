@@ -40,6 +40,7 @@ export class CodexApprovalHandler implements ApprovalHandler {
         private readonly permissionContext: PermissionPromptContext,
         private readonly cancellationSignal: AbortSignal | undefined,
         private readonly renderer: AcpToolCallRenderer,
+        private readonly denyRequests?: () => boolean,
     ) {}
 
     async handleCommandExecution(
@@ -124,6 +125,7 @@ export class CodexApprovalHandler implements ApprovalHandler {
     }
 
     private requestPermission(request: acp.RequestPermissionRequest): Promise<acp.RequestPermissionResponse> {
+        if (this.denyRequests?.()) return Promise.resolve({outcome: {outcome: "cancelled"}});
         const signal = subagentInteractionSignal(request.sessionId, this.cancellationSignal);
         return withSubagentUserAction(request.sessionId, () => this.connection.request(
             acp.methods.client.session.requestPermission,

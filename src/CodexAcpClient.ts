@@ -95,6 +95,10 @@ import {findSupportedEffort} from "./ModelConfigOption";
 import {type ProviderStartupConfig, configOverride, NO_PROVIDER_STARTUP_CONFIG} from "./CodexConfigOverride";
 import {disableUnsupportedSkills, withoutUnsupportedSkills} from "./UnsupportedSkills";
 export type {SessionMetadata, SessionMetadataWithThread} from "./SessionMetadata";
+import {
+    permissionProfileForMode,
+    type PermissionProfileConfig,
+} from "./PermissionProfileConfig";
 /** A null turn marks unavailable outcome metadata, not a failed turn. */
 export type RecordedSubagentEntry = {item: ThreadItem; completed: boolean; turnId?: string} | {turn: Turn | null};
 
@@ -164,6 +168,7 @@ export class CodexAcpClient {
     private readonly codexClient: CodexAppServerClient;
     private readonly config: JsonObject;
     private readonly modelProvider: string | null;
+    private readonly permissionProfileConfig: PermissionProfileConfig | undefined;
     private gatewayConfig: GatewayConfig | null;
     /**
      * Where the stored gateway routing came from: the `gateway` auth method
@@ -179,10 +184,16 @@ export class CodexAcpClient {
     private configPath: string | null = null;
 
 
-    constructor(codexClient: CodexAppServerClient, codexConfig?: JsonObject, modelProvider?: string) {
+    constructor(
+        codexClient: CodexAppServerClient,
+        codexConfig?: JsonObject,
+        modelProvider?: string,
+        permissionProfileConfig?: PermissionProfileConfig,
+    ) {
         this.codexClient = codexClient;
         this.config = codexConfig ?? {};
         this.modelProvider = modelProvider ?? null;
+        this.permissionProfileConfig = permissionProfileConfig;
         this.gatewayConfig = null;
         this.gatewayConfigSource = null;
         this.subagents = new CodexSubagentSubscriptions(codexClient);
@@ -197,7 +208,7 @@ export class CodexAcpClient {
      * that the agent set at runtime (gateway auth, `providers/set`) is copied by {@link adoptRoutingFrom}.
      */
     withAppServer(codexClient: CodexAppServerClient): CodexAcpClient {
-        const client = new CodexAcpClient(codexClient, this.config, this.modelProvider ?? undefined);
+        const client = new CodexAcpClient(codexClient, this.config, this.modelProvider ?? undefined, this.permissionProfileConfig);
         client.adoptRoutingFrom(this);
         return client;
     }
@@ -691,10 +702,12 @@ export class CodexAcpClient {
     ): Promise<SessionMetadata> {
         const instructions = await this.resolveSessionInstructions(request, previousInstructions);
         const additionalDirectories = readAdditionalDirectories(request.cwd, request.additionalDirectories, request._meta);
+        const initialAgentMode = AgentMode.getInitialAgentMode();
         await this.refreshSkills(request.cwd, additionalDirectories);
 
-        const {config, skippedMcpServers, defaultPermissionProfileId, ...permissionProfileMetadata} =
-            await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? []);
+        const sessionConfig = await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? []);
+        const {config, skippedMcpServers, defaultPermissionProfileId, ...permissionProfileMetadata} = sessionConfig;
+        await this.restrictResumedMcpServers(request.sessionId, sessionConfig);
         const response = await this.resumeThreadWithInstructions({
             excludeTurns: true,
             config,
@@ -702,6 +715,7 @@ export class CodexAcpClient {
             modelProvider: await this.getResumeModelProvider(),
             threadId: request.sessionId,
             ...(instructions?.text !== undefined ? {developerInstructions: instructions.developerInstructions} : {}),
+            ...this.permissionProfileSelection(initialAgentMode, request.cwd, additionalDirectories),
         }, request, previousInstructions);
         onSubscribed?.();
         const codexModels = await this.fetchAvailableModels();
@@ -721,6 +735,7 @@ export class CodexAcpClient {
             ...(instructions ? {instructions} : {}),
             activePermissionProfileId: response.materialized ? response.activePermissionProfileId : defaultPermissionProfileId ?? null,
             ...permissionProfileMetadata,
+            fullAccessApprovedMcpServers: sessionConfig.fullAccessApprovedMcpServers,
         }
     }
 
@@ -754,10 +769,12 @@ export class CodexAcpClient {
     ): Promise<SessionMetadataWithThread> {
         const instructions = await this.resolveSessionInstructions(request, previousInstructions);
         const additionalDirectories = readAdditionalDirectories(request.cwd, request.additionalDirectories, request._meta);
+        const initialAgentMode = AgentMode.getInitialAgentMode();
         await this.refreshSkills(request.cwd, additionalDirectories);
 
-        const {config, skippedMcpServers, defaultPermissionProfileId, ...permissionProfileMetadata} =
-            await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? []);
+        const sessionConfig = await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? []);
+        const {config, skippedMcpServers, defaultPermissionProfileId, ...permissionProfileMetadata} = sessionConfig;
+        await this.restrictResumedMcpServers(request.sessionId, sessionConfig);
         const response = await this.resumeThreadWithInstructions({
             excludeTurns: true,
             config,
@@ -765,6 +782,7 @@ export class CodexAcpClient {
             modelProvider: await this.getResumeModelProvider(),
             threadId: request.sessionId,
             ...(instructions?.text !== undefined ? {developerInstructions: instructions.developerInstructions} : {}),
+            ...this.permissionProfileSelection(initialAgentMode, request.cwd, additionalDirectories),
         }, request, previousInstructions);
         onSubscribed?.();
         // Resume cursors bound durable history; later turns arrive through live events.
@@ -806,6 +824,7 @@ export class CodexAcpClient {
             ...(instructions ? {instructions} : {}),
             activePermissionProfileId: response.materialized ? response.activePermissionProfileId : defaultPermissionProfileId ?? null,
             ...permissionProfileMetadata,
+            fullAccessApprovedMcpServers: sessionConfig.fullAccessApprovedMcpServers,
         };
     }
 
@@ -861,15 +880,17 @@ export class CodexAcpClient {
         const instructions = await this.resolveSessionInstructions(request, undefined, true);
         const additionalDirectories = readAdditionalDirectories(request.cwd, request.additionalDirectories, request._meta);
         const developerInstructions = instructions?.developerInstructions;
+        const initialAgentMode = AgentMode.getInitialAgentMode();
         await this.refreshSkills(request.cwd, additionalDirectories);
 
-        const {config, skippedMcpServers, defaultPermissionProfileId: _defaultPermissionProfileId, ...permissionProfileMetadata} =
-            await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? []);
+        const sessionConfig = await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? []);
+        const {config, skippedMcpServers, defaultPermissionProfileId: _defaultPermissionProfileId, ...permissionProfileMetadata} = sessionConfig;
         const response = await this.codexClient.threadStart({
             config,
             modelProvider: this.getModelProvider(),
             cwd: request.cwd,
             ...(developerInstructions !== undefined && {developerInstructions}),
+            ...this.permissionProfileSelection(initialAgentMode, request.cwd, additionalDirectories),
         });
 
         const codexModels = await this.fetchAvailableModels();
@@ -889,6 +910,7 @@ export class CodexAcpClient {
             ...(instructions ? {instructions} : {}),
             activePermissionProfileId: response.activePermissionProfile?.id ?? null,
             ...permissionProfileMetadata,
+            fullAccessApprovedMcpServers: sessionConfig.fullAccessApprovedMcpServers,
         };
     }
 
@@ -1012,16 +1034,41 @@ export class CodexAcpClient {
         }
     }
 
-    /**
-     * Drops a session's notification handler without unsubscribing on the
-     * app-server: for a baseline tracker registered before `thread/resume`
-     * (to catch a Codex-initiated turn that starts before setup finishes)
-     * whose resume/load never actually subscribed the connection, so there
-     * is nothing to unsubscribe there.
-     */
+    // Drop a baseline tracker whose failed resume never subscribed the app-server connection.
     discardSessionSubscription(sessionId: string): void {
         this.codexClient.clearThreadHandlers(sessionId);
         this.subagents.clear(sessionId);
+    }
+
+    private permissionProfileSelection(
+        agentMode: AgentMode,
+        cwd: string,
+        additionalDirectories: string[],
+    ): {approvalPolicy: AgentMode["approvalPolicy"]; permissions: string; runtimeWorkspaceRoots: string[]} | Record<string, never> {
+        const config = this.permissionProfileConfig;
+        if (!config) return {};
+        return {
+            approvalPolicy: this.approvalPolicyForMode(agentMode),
+            permissions: permissionProfileForMode(config, agentMode.id),
+            runtimeWorkspaceRoots: sessionRoots(cwd, additionalDirectories),
+        };
+    }
+
+    isProtectedFullAccess(agentMode: AgentMode): boolean {
+        return this.permissionProfileConfig !== undefined && agentMode.kind === "full_access";
+    }
+
+    private approvalPolicyForMode(agentMode: AgentMode): AgentMode["approvalPolicy"] {
+        if (!this.isProtectedFullAccess(agentMode)) return agentMode.approvalPolicy;
+        // Codex 0.153.3 routes tool approvals separately; false blocks server-origin elicitations, not native tool approvals.
+        return {granular: {sandbox_approval: false, rules: false, skill_approval: false, request_permissions: false, mcp_elicitations: false}};
+    }
+
+    private async restrictResumedMcpServers(sessionId: string, prepared: SessionConfig): Promise<void> {
+        if (prepared.fullAccessApprovedMcpServers.length === 0) return;
+        const loaded = await this.codexClient.threadLoadedList({});
+        // A loaded thread may ignore resume config, so the servers just declared are not proof of what it actually runs.
+        if (loaded.data.includes(sessionId) || loaded.nextCursor !== null) prepared.fullAccessApprovedMcpServers = [];
     }
 
     async deleteSession(sessionId: string): Promise<void> {
@@ -1173,14 +1220,16 @@ export class CodexAcpClient {
             ...(effectiveConfig?.config?.approvals_reviewer != null && {approvalsReviewer: effectiveConfig.config.approvals_reviewer}),
         };
         if (mcpServers.length === 0) {
-            return {config: configWithWorkspaceRoots, skippedMcpServers: [], ...permissionProfileMetadata};
+            return {config: configWithWorkspaceRoots, skippedMcpServers: [], ...permissionProfileMetadata, fullAccessApprovedMcpServers: []};
         }
 
         const requestedServers = normalizeMcpServers(mcpServers).map(server => ({name: server.name, server}));
         let serversToConfigure = requestedServers;
+        const existingNames = shouldDeduplicateMcpConflicts() || this.permissionProfileConfig
+            ? this.getConfigMcpServerNames(effectiveConfig)
+            : new Set<string>();
         if (shouldDeduplicateMcpConflicts()) {
             // Prevents Codex from deep-merging incompatible field types, such as url and stdio schemas.
-            const existingNames = this.getConfigMcpServerNames(effectiveConfig);
             serversToConfigure = requestedServers.filter(mcp => !existingNames.has(mcp.name));
         }
         const skippedMcpServers = requestedServers
@@ -1193,16 +1242,22 @@ export class CodexAcpClient {
             });
         }
         if (serversToConfigure.length === 0) {
-            return {config: configWithWorkspaceRoots, skippedMcpServers, ...permissionProfileMetadata};
+            return {config: configWithWorkspaceRoots, skippedMcpServers, ...permissionProfileMetadata, fullAccessApprovedMcpServers: []};
         }
 
+        const configuredServers = Object.fromEntries(serversToConfigure.map(mcp => [mcp.name, toCodexMcpServerConfig(mcp.server)]));
+        const inheritedServers = isJsonObject(this.config["mcp_servers"]) ? this.config["mcp_servers"] : {};
         return {
             config: {
                 ...configWithWorkspaceRoots,
-                "mcp_servers": Object.fromEntries(serversToConfigure.map(mcp => [mcp.name, toCodexMcpServerConfig(mcp.server)])),
+                "mcp_servers": configuredServers,
             },
             skippedMcpServers,
             ...permissionProfileMetadata,
+            fullAccessApprovedMcpServers: this.permissionProfileConfig
+                ? Object.keys(configuredServers)
+                    .filter(name => !existingNames.has(name) && !Object.hasOwn(inheritedServers, name))
+                : [],
         };
     }
 
@@ -1405,7 +1460,7 @@ export class CodexAcpClient {
         return await this.codexClient.runTurn({
             threadId: request.sessionId,
             input: input,
-            approvalPolicy: agentMode.approvalPolicy,
+            approvalPolicy: this.approvalPolicyForMode(agentMode),
             approvalsReviewer: agentMode.approvalsReviewer,
             ...(permissionProfileId
                 ? {
@@ -1419,6 +1474,19 @@ export class CodexAcpClient {
             serviceTier: serviceTier,
             ...(clientUserMessageId !== undefined ? {clientUserMessageId} : {}),
         }, onTurnStarted);
+    }
+
+    async setAgentMode(
+        sessionId: string,
+        agentMode: AgentMode,
+    ): Promise<void> {
+        const config = this.permissionProfileConfig;
+        if (!config) return;
+        await this.codexClient.threadSettingsUpdate({
+            threadId: sessionId,
+            approvalPolicy: this.approvalPolicyForMode(agentMode),
+            permissions: permissionProfileForMode(config, agentMode.id),
+        });
     }
 
     async setCollaborationMode(sessionId: string, mode: ModeKind, currentModelId: string): Promise<void> {
@@ -1600,6 +1668,7 @@ export type SessionConfig = {
     approvalPolicy?: AskForApproval,
     approvalsReviewer?: ApprovalsReviewer,
     permissionProfiles?: PermissionProfileSummary[],
+    fullAccessApprovedMcpServers: string[],
 }
 
 function buildPromptItems(prompt: acp.ContentBlock[]): UserInput[] {
@@ -1826,6 +1895,10 @@ function addAdditionalDirectoriesToSandboxPolicy(
 
 function uniqueStrings(values: string[]): string[] {
     return Array.from(new Set(values));
+}
+
+function sessionRoots(cwd: string, additionalDirectories: string[]): string[] {
+    return uniqueStrings([cwd, ...additionalDirectories]);
 }
 
 function arraysEqual(left: string[], right: string[]): boolean {

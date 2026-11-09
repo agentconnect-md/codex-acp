@@ -27,6 +27,7 @@ export type SessionMetadata = {
     approvalPolicy?: AskForApproval,
     approvalsReviewer?: ApprovalsReviewer,
     permissionProfiles?: PermissionProfileSummary[],
+    fullAccessApprovedMcpServers?: string[],
 }
 
 export type SessionMetadataWithThread = SessionMetadata & {
