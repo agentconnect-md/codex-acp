@@ -69,7 +69,7 @@ function startAcpServer() {
     });
 
     const startupState = {
-        appServerStartupArgs: hookConfig.appServerStartupArgs,
+        appServerStartupArgs,
         providerStartupConfig: providerStartupConfig(modelProvider ?? null, hookConfig.sessionConfig ?? {}, null),
     };
     const startup = appServerStartup(startupState);
