@@ -52,6 +52,7 @@ async function createSession(
         activePermissionProfileId?: string | null;
         approvalPolicy?: "on-request" | "never";
         approvalsReviewer?: "user" | "auto_review";
+        permissionProfileConfig?: PermissionProfileConfig;
     } = {},
 ) {
     const {
@@ -61,8 +62,9 @@ async function createSession(
         activePermissionProfileId = null,
         approvalPolicy = "on-request",
         approvalsReviewer = "user",
+        permissionProfileConfig,
     } = options;
-    const fixture = createCodexMockTestFixture();
+    const fixture = createCodexMockTestFixture(undefined, undefined, permissionProfileConfig);
     const codexAcpAgent = fixture.getCodexAcpAgent();
     const codexAcpClient = fixture.getCodexAcpClient();
 
@@ -339,7 +341,7 @@ describe("Session config options", () => {
     it("changes the agent mode via setSessionConfigOption", async () => {
         const {fast} = buildModels();
         const {codexAcpAgent, codexAcpClient} = await createSession(
-            "fast-model[medium]", [fast],
+            "fast-model[medium]", [fast], {permissionProfileConfig: TEST_PERMISSION_PROFILE_CONFIG},
         );
         const update = vi.spyOn((codexAcpClient as any).codexClient, "threadSettingsUpdate").mockResolvedValue(undefined);
 
