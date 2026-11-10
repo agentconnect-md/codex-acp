@@ -1,4 +1,5 @@
 import {z} from "zod";
+import {RequestError} from "@agentclientprotocol/sdk/unstable";
 
 export const PERMISSION_PROFILE_CONFIG_ENV = "CODEX_ACP_PERMISSION_PROFILE_CONFIG";
 
@@ -13,6 +14,19 @@ const permissionProfileConfigSchema = z.object({
 });
 
 export type PermissionProfileConfig = z.infer<typeof permissionProfileConfigSchema>;
+
+export function sessionPermissionProfiles(meta: Record<string, unknown> | null | undefined, launcher?: PermissionProfileConfig) {
+    const raw = z.object({codex: z.object({permissionProfiles: z.unknown().optional()}).optional()})
+        .passthrough().safeParse(meta ?? {});
+    const profiles = raw.success ? raw.data.codex?.permissionProfiles : undefined;
+    if (profiles == null) return undefined;
+    const parsed = z.record(z.string(), z.record(z.string(), z.json())).safeParse(profiles);
+    const allowed = new Set(Object.values(launcher?.modeProfiles ?? {}));
+    if (!parsed.success || Object.keys(parsed.data).some(id => !allowed.has(id))) {
+        throw RequestError.invalidParams(undefined, "Session permission profiles must name launcher-owned profiles");
+    }
+    return parsed.data;
+}
 
 // The trusted launcher defines profiles; the adapter only selects the profile for the active mode.
 export function readPermissionProfileConfig(
