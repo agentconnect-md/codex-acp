@@ -487,7 +487,6 @@ export interface CodexProcessState {
     /** The provider routing of the next app-server; see `CodexAcpClient.providerStartupConfig`. */
     providerStartupConfig?: ProviderStartupConfig;
     modelProvider: string | undefined;
-    env?: NodeJS.ProcessEnv | undefined;
     permissionProfileConfig?: PermissionProfileConfig | undefined;
     stderr: string;
     stderrProcess?: CodexConnection["process"];

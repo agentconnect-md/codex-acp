@@ -26,8 +26,7 @@ workspace profile. The adapter treats profile definitions as opaque operator pol
 
 When configured, codex-acp selects the matching profile on thread start, resume,
 and mode changes, preserves ACP additional workspace roots, and omits the legacy
-per-turn `sandboxPolicy` that would otherwise override the selected profile. The
-launch variable is removed from the Codex child environment after it is parsed.
+per-turn `sandboxPolicy` that would otherwise override the selected profile.
 Malformed or incomplete mappings fail startup instead of falling back to legacy
 sandbox behavior.
 

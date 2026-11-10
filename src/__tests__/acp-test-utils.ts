@@ -372,7 +372,6 @@ export function createCodexMockTestFixture(
             config: undefined,
             appServerStartupArgs: ["app-server"],
             modelProvider: undefined,
-            env: {},
             permissionProfileConfig,
             stderr: "",
         }} : {}),
