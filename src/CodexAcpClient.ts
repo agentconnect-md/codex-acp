@@ -97,6 +97,7 @@ import {disableUnsupportedSkills, withoutUnsupportedSkills} from "./UnsupportedS
 export type {SessionMetadata, SessionMetadataWithThread} from "./SessionMetadata";
 import {
     permissionProfileForMode,
+    sessionPermissionProfiles,
     type PermissionProfileConfig,
 } from "./PermissionProfileConfig";
 /** A null turn marks unavailable outcome metadata, not a failed turn. */
@@ -705,7 +706,7 @@ export class CodexAcpClient {
         const initialAgentMode = AgentMode.getInitialAgentMode();
         await this.refreshSkills(request.cwd, additionalDirectories);
 
-        const sessionConfig = await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? []);
+        const sessionConfig = await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? [], request._meta);
         const {config, skippedMcpServers, defaultPermissionProfileId, ...permissionProfileMetadata} = sessionConfig;
         await this.restrictResumedMcpServers(request.sessionId, sessionConfig);
         const response = await this.resumeThreadWithInstructions({
@@ -751,7 +752,7 @@ export class CodexAcpClient {
             codexClient: this.codexClient,
             refreshSkills: (cwd, directories) => this.refreshSkills(cwd, directories),
             createSessionConfig: (cwd, directories, mcpServers) =>
-                this.createSessionConfig(cwd, directories, mcpServers),
+                this.createSessionConfig(cwd, directories, mcpServers, request._meta),
             getResumeModelProvider: () => this.getResumeModelProvider(),
             fetchAvailableModels: () => this.fetchAvailableModels(),
             createCurrentModelId: (models, model, reasoningEffort) =>
@@ -772,7 +773,7 @@ export class CodexAcpClient {
         const initialAgentMode = AgentMode.getInitialAgentMode();
         await this.refreshSkills(request.cwd, additionalDirectories);
 
-        const sessionConfig = await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? []);
+        const sessionConfig = await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? [], request._meta);
         const {config, skippedMcpServers, defaultPermissionProfileId, ...permissionProfileMetadata} = sessionConfig;
         await this.restrictResumedMcpServers(request.sessionId, sessionConfig);
         const response = await this.resumeThreadWithInstructions({
@@ -883,7 +884,7 @@ export class CodexAcpClient {
         const initialAgentMode = AgentMode.getInitialAgentMode();
         await this.refreshSkills(request.cwd, additionalDirectories);
 
-        const sessionConfig = await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? []);
+        const sessionConfig = await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? [], request._meta);
         const {config, skippedMcpServers, defaultPermissionProfileId: _defaultPermissionProfileId, ...permissionProfileMetadata} = sessionConfig;
         const response = await this.codexClient.threadStart({
             config,
@@ -1058,6 +1059,10 @@ export class CodexAcpClient {
         return this.permissionProfileConfig !== undefined && agentMode.kind === "full_access";
     }
 
+    supportsSessionPermissionProfiles(): boolean {
+        return this.permissionProfileConfig !== undefined;
+    }
+
     private approvalPolicyForMode(agentMode: AgentMode): AgentMode["approvalPolicy"] {
         if (!this.isProtectedFullAccess(agentMode)) return agentMode.approvalPolicy;
         // Codex 0.153.3 routes tool approvals separately; false blocks server-origin elicitations, not native tool approvals.
@@ -1186,7 +1191,8 @@ export class CodexAcpClient {
     private async createSessionConfig(
         projectPath: string,
         additionalDirectories: string[],
-        mcpServers: Array<AcpMcpServer>
+        mcpServers: Array<AcpMcpServer>,
+        meta?: Record<string, unknown> | null,
     ): Promise<SessionConfig> {
         const sessionRoots = [projectPath, ...additionalDirectories];
         const activeProvider = this.gatewayConfig
@@ -1202,8 +1208,10 @@ export class CodexAcpClient {
             apiType: activeProvider.apiType,
             baseUrl: activeProvider.baseUrl,
         });
+        const permissionProfilesOverride = sessionPermissionProfiles(meta, this.permissionProfileConfig);
         const mergedConfig = {
             ...disableUnsupportedSkills(forceGitRootTurnDiffPaths(mergeGatewayConfig(this.config, this.gatewayConfig))),
+            ...(permissionProfilesOverride ? {permissions: permissionProfilesOverride} : {}),
             projects: Object.fromEntries(sessionRoots.map(root => [root, {
                 trust_level: "trusted",
             }])),

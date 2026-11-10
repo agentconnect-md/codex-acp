@@ -958,6 +958,7 @@ export class CodexAcpServer {
                 ...this.sessionIndex.agentCapabilities(),
             ];
         return {
+            ...(this.codexAcpClient.supportsSessionPermissionProfiles() ? {codex: {sessionPermissionProfiles: true}} : {}),
             steering: {
                 supported: true,
             },
