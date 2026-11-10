@@ -14,7 +14,7 @@ import {runCodexCli} from "./CodexCli";
 import {prepareCodexHookConfig} from "./CodexHookConfig";
 import {createAcpAgentRouter} from "./AcpAgentRouter";
 import type {AcpClientConnection, AcpV2Connection} from "./ACPSessionConnection";
-import {PERMISSION_PROFILE_CONFIG_ENV, readPermissionProfileConfig} from "./PermissionProfileConfig";
+import {readPermissionProfileConfig} from "./PermissionProfileConfig";
 
 if (process.argv.includes("--version")) {
     console.log(`${packageJson.name} ${packageJson.version}`);
@@ -51,8 +51,6 @@ function startAcpServer() {
     const parsedAuthRequest = authRequestString ? JSON.parse(authRequestString) : undefined;
     const defaultAuthRequest = parsedAuthRequest && isCodexAuthRequest(parsedAuthRequest) ? parsedAuthRequest : undefined;
     const permissionProfileConfig = readPermissionProfileConfig();
-    const codexEnv = {...process.env};
-    delete codexEnv[PERMISSION_PROFILE_CONFIG_ENV];
     const appServerStartupArgs = [
         ...hookConfig.appServerStartupArgs,
         ...(permissionProfileConfig?.configOverrides.flatMap(override => ["-c", override]) ?? []),
@@ -80,7 +78,6 @@ function startAcpServer() {
         config: hookConfig.sessionConfig,
         ...startupState,
         modelProvider,
-        env: codexEnv,
         permissionProfileConfig,
         stderr: "",
     };

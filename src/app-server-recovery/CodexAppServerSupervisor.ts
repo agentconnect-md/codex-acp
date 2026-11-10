@@ -12,7 +12,6 @@ export interface SupervisedProcessState {
     appServerStartupArgs?: string[];
     /** The provider routing that the next app-server starts with; none when unset. */
     providerStartupConfig?: ProviderStartupConfig;
-    env?: NodeJS.ProcessEnv | undefined;
     stderr: string;
 }
 
