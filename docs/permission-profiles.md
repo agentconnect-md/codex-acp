@@ -25,3 +25,9 @@ Subsequent prompts send the selected profile ID as `turn/start.permissions`, wit
 Custom modes take `approval_policy` and `approvals_reviewer` from the effective, cwd-aware `config/read` response. Absent or null values default to `on-request` and `user`. The previous turn's approval overrides do not change these defaults. The existing built-in ACP modes keep their own approval and sandbox settings.
 
 The permission fields on thread responses and `turn/start` belong to Codex's experimental schema. The adapter declares these extensions separately because `npm run generate-types` generates the stable schema.
+
+## Launcher-owned session profiles
+
+With launcher profiles configured, initialize advertises `_meta.codex.sessionPermissionProfiles: true` on ACP v1 and v2. A trusted client may supply `_meta.codex.permissionProfiles` on session new, load, resume, or fork. The value is a native Codex `permissions` table containing complete definitions for launcher-owned profile IDs from `CODEX_ACP_PERMISSION_PROFILE_CONFIG`; unknown IDs or malformed tables return invalid params. Null or absent metadata keeps the launch configuration.
+
+These definitions are applied through thread config, without changing the process-wide profile catalog or mode mapping. The client must preserve the launcher's protected paths in every supplied definition. Codex retains the definitions for subsequent turns and mode changes. Clients reopening a session supply its definitions again; this also supports workspaces prepared after the adapter process started.
