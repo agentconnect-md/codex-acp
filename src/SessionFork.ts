@@ -35,11 +35,12 @@ export async function forkSession(
 ): Promise<SessionMetadata> {
     await dependencies.refreshSkills(request.cwd, additionalDirectories);
     const lastTurnId = await resolveForkTurnId(request, dependencies.codexClient);
-    const {config, skippedMcpServers, defaultPermissionProfileId: _defaultPermissionProfileId, ...permissionProfileMetadata} = await dependencies.createSessionConfig(
+    const sessionConfig = await dependencies.createSessionConfig(
         request.cwd,
         additionalDirectories,
         request.mcpServers ?? [],
     );
+    const {config, skippedMcpServers, defaultPermissionProfileId: _defaultPermissionProfileId, ...permissionProfileMetadata} = sessionConfig;
     const response = await dependencies.codexClient.threadFork({
         excludeTurns: true,
         config,
@@ -73,6 +74,7 @@ export async function forkSession(
         activePermissionProfileId: response.activePermissionProfile?.id ?? null,
         ...permissionProfileMetadata,
         ...(instructions ? {instructions} : {}),
+        fullAccessApprovedMcpServers: sessionConfig.fullAccessApprovedMcpServers,
     };
 }
 

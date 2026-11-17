@@ -15,6 +15,7 @@ import {prepareCodexHookConfig} from "./CodexHookConfig";
 import {createAcpAgentRouter} from "./AcpAgentRouter";
 import type {AcpClientConnection, AcpV2Connection} from "./ACPSessionConnection";
 import type {McpOverAcpToHttp} from "./McpServerConfig";
+import {PERMISSION_PROFILE_CONFIG_ENV, readPermissionProfileConfig} from "./PermissionProfileConfig";
 
 if (process.argv.includes("--version")) {
     console.log(`${packageJson.name} ${packageJson.version}`);
@@ -50,6 +51,13 @@ function startAcpServer() {
     const hookConfig = prepareCodexHookConfig(config);
     const parsedAuthRequest = authRequestString ? JSON.parse(authRequestString) : undefined;
     const defaultAuthRequest = parsedAuthRequest && isCodexAuthRequest(parsedAuthRequest) ? parsedAuthRequest : undefined;
+    const permissionProfileConfig = readPermissionProfileConfig();
+    const codexEnv = {...process.env};
+    delete codexEnv[PERMISSION_PROFILE_CONFIG_ENV];
+    const appServerStartupArgs = [
+        ...hookConfig.appServerStartupArgs,
+        ...(permissionProfileConfig?.configOverrides.flatMap(override => ["-c", override]) ?? []),
+    ];
 
     logger.log("Startup", {
         name: packageJson.name,
@@ -62,7 +70,7 @@ function startAcpServer() {
     });
 
     const startupState = {
-        appServerStartupArgs: hookConfig.appServerStartupArgs,
+        appServerStartupArgs,
         providerStartupConfig: providerStartupConfig(modelProvider ?? null, hookConfig.sessionConfig ?? {}, null),
     };
     const startup = appServerStartup(startupState);
@@ -73,6 +81,8 @@ function startAcpServer() {
         config: hookConfig.sessionConfig,
         ...startupState,
         modelProvider,
+        env: codexEnv,
+        permissionProfileConfig,
         stderr: "",
     };
     const supervisor = new CodexAppServerSupervisor(codexProcessState);
@@ -87,7 +97,7 @@ function startAcpServer() {
 
     function createAgent(connection: AcpClientConnection | AcpV2Connection, toHttp: McpOverAcpToHttp): CodexAcpServer {
         const appServerClient = new CodexAppServerClient(codexProcessState.connection.connection);
-        const codexClient = new CodexAcpClient(appServerClient, hookConfig.sessionConfig, modelProvider, toHttp);
+        const codexClient = new CodexAcpClient(appServerClient, hookConfig.sessionConfig, modelProvider, toHttp, permissionProfileConfig);
         return new CodexAcpServer(
             connection,
             codexClient,
