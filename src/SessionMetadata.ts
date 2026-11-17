@@ -33,6 +33,11 @@ export type SessionMetadata = SessionOptionMetadata & {
     sessionTitle?: string | null,
     /** Whether `thread/revert` takes the thread, see `isRewindableThread`. */
     rewindable?: boolean,
+    activePermissionProfileId?: string | null,
+    approvalPolicy?: AskForApproval,
+    approvalsReviewer?: ApprovalsReviewer,
+    permissionProfiles?: PermissionProfileSummary[],
+    fullAccessApprovedMcpServers?: string[],
 }
 
 export type SessionMetadataWithThread = SessionMetadata & {

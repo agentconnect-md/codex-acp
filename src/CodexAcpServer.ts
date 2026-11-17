@@ -42,6 +42,7 @@ import {
 } from "./CodexThreadErrors";
 import {requiresLogout} from "./CodexErrorExplanations";
 import {type CodexConnection} from "./CodexJsonRpcConnection";
+import type {PermissionProfileConfig} from "./PermissionProfileConfig";
 import {AppServerRecovery, recoveryLimitsFromEnv} from "./app-server-recovery/AppServerRecovery";
 import {
     CODEX_PROCESS_EXITED_ERROR_CODE,
@@ -282,6 +283,8 @@ interface SessionOptionState {
     supportedInputModalities: Array<InputModality>,
     agentMode: AgentMode,
     availableAgentModes: AgentMode[],
+    permissionModeRevision?: number;
+    fullAccessApprovedMcpServers?: string[];
     collaborationMode: ModeKind,
     fastModeEnabled: boolean;
     currentModelSupportsFast: boolean;
@@ -512,6 +515,8 @@ export interface CodexProcessState {
     /** The provider routing of the next app-server; see `CodexAcpClient.providerStartupConfig`. */
     providerStartupConfig?: ProviderStartupConfig;
     modelProvider: string | undefined;
+    env?: NodeJS.ProcessEnv | undefined;
+    permissionProfileConfig?: PermissionProfileConfig | undefined;
     stderr: string;
     stderrProcess?: CodexConnection["process"];
     /** Owns the app-server child; created by `index.ts`, or by the server for a state without one. */
@@ -1017,6 +1022,7 @@ export class CodexAcpServer {
                 ...this.sessionIndex.agentCapabilities(),
             ];
         return {
+            ...(this.codexAcpClient.supportsSessionPermissionProfiles() ? {codex: {sessionPermissionProfiles: true}} : {}),
             steering: {
                 supported: true,
             },
@@ -2713,6 +2719,7 @@ export class CodexAcpServer {
                         resumed = onSubscribed === undefined
                             ? await replacement.resumeSession(request, undefined, session.instructions)
                             : await replacement.resumeSession(request, onSubscribed, session.instructions);
+                        session.fullAccessApprovedMcpServers = resumed.fullAccessApprovedMcpServers ?? [];
                         return resumed;
                     };
                     await (this.recovery?.resumeForReplacement(session, replacementGeneration, replacement, resume) ?? resume());
@@ -2877,6 +2884,7 @@ export class CodexAcpServer {
                 }, onSubscribed, session.instructions);
                 // A session the provider restart failed to resume gets the models of the routing here.
                 await this.applyResumedModels(session, client, metadata);
+                session.fullAccessApprovedMcpServers = metadata.fullAccessApprovedMcpServers ?? [];
                 return {collaborationMode: metadata.collaborationMode};
             },
             applyCollaborationMode: (session, client) =>
@@ -3220,6 +3228,14 @@ export class CodexAcpServer {
         if (params.configId === COLLABORATION_MODE_CONFIG_ID) {
             return this.applyCollaborationModeChange(sessionState, this.stringConfigValue(params));
         }
+        if (params.configId === MODE_CONFIG_ID) {
+            const newMode = AgentMode.find(this.stringConfigValue(params), sessionState.availableAgentModes);
+            if (!newMode) throw RequestError.invalidParams();
+            sessionState.permissionModeRevision = (sessionState.permissionModeRevision ?? 0) + 1;
+            return this.codexAcpClient.setAgentMode(sessionState.sessionId, newMode).then(() => {
+                this.changeLocalConfigOption(sessionState, params);
+            });
+        }
         this.changeLocalConfigOption(sessionState, params);
     }
 
@@ -3277,9 +3293,7 @@ export class CodexAcpServer {
 
     private applyModeChange(sessionState: SessionOptionState, value: string): void {
         const newMode = AgentMode.find(value, sessionState.availableAgentModes);
-        if (!newMode) {
-            throw RequestError.invalidParams();
-        }
+        if (!newMode) throw RequestError.invalidParams();
         sessionState.agentMode = newMode;
     }
 
@@ -5543,11 +5557,18 @@ export class CodexAcpServer {
             const permissionLifecycle = this.permissionLifecycleContext(sessionState);
             const permissionContext = permissionLifecycle.beginPrompt();
             const toolCallRenderer = new AcpToolCallRenderer(this.capabilities);
+            let promptAgentMode: AgentMode | undefined;
+            let permissionModeRevision: number | undefined;
+            const approvedServers = new Set(sessionState.fullAccessApprovedMcpServers);
+            const noApprovedServers = new Set<string>();
+            let mcpApprovalTurnId: string | null = null;
+            const isProtectedFullAccess = () => this.codexAcpClient.isProtectedFullAccess(promptAgentMode ?? sessionState.agentMode);
             const approvalHandler = new CodexApprovalHandler(
                 interactionConnection,
                 permissionContext,
                 activePrompt.interactionSignal,
                 toolCallRenderer,
+                isProtectedFullAccess,
             );
             const elicitationHandler = new CodexElicitationHandler(
                 interactionConnection,
@@ -5555,6 +5576,13 @@ export class CodexAcpServer {
                 this.clientCapabilities,
                 activePrompt.interactionSignal,
                 toolCallRenderer,
+                request => {
+                    if (!isProtectedFullAccess()) return undefined;
+                    return mcpApprovalTurnId !== null && request.turnId === mcpApprovalTurnId
+                        && sessionState.agentMode.kind === "full_access"
+                        && sessionState.permissionModeRevision === permissionModeRevision
+                        ? approvedServers : noApprovedServers;
+                },
             );
             const observeInteraction = async (event: ServerNotification): Promise<void> => {
                 const threadId = (event.params as {threadId?: unknown}).threadId;
@@ -5721,6 +5749,8 @@ export class CodexAcpServer {
                 throw RequestError.invalidRequest("The current model does not support image input");
             }
             const agentMode = sessionState.agentMode;
+            promptAgentMode = agentMode;
+            permissionModeRevision = sessionState.permissionModeRevision;
             const serviceTier = resolveFastServiceTier(
                 sessionState.fastModeEnabled,
                 sessionState.currentModelSupportsFast,
@@ -5741,6 +5771,7 @@ export class CodexAcpServer {
                     sessionState.cwd,
                     sessionState.additionalDirectories,
                     (turnId) => {
+                        mcpApprovalTurnId = turnId;
                         const turn = {threadId: params.sessionId, turnId};
                         activePrompt.currentTurn = turn;
                         // A turn the prompt joined as a steer starts nothing, so it has no cursor.
@@ -5765,7 +5796,8 @@ export class CodexAcpServer {
                         }
                         onTurnStarted?.();
                     },
-                    () => this.promptShouldStop(params.sessionId, activePrompt),
+                    () => this.promptShouldStop(params.sessionId, activePrompt)
+                        || sessionState.permissionModeRevision !== permissionModeRevision,
                     insertion?.clientUserMessageId,
                     activePrompt.interactionSignal,
                 ));
@@ -5867,6 +5899,7 @@ export class CodexAcpServer {
                             sessionState.cwd,
                             sessionState.additionalDirectories,
                             (turnId) => {
+                                mcpApprovalTurnId = turnId;
                                 const turn = {threadId: params.sessionId, turnId};
                                 activePrompt.currentTurn = turn;
                                 sessionState.hasTurn = true;
@@ -5880,7 +5913,8 @@ export class CodexAcpServer {
                                 recoverableSessionFailure = sessionState.sessionFailure;
                                 promptNotificationsActive = true;
                             },
-                            () => this.promptShouldStop(params.sessionId, activePrompt),
+                            () => this.promptShouldStop(params.sessionId, activePrompt)
+                                || sessionState.permissionModeRevision !== permissionModeRevision,
                             implementationClientUserMessageId,
                             activePrompt.interactionSignal,
                         ),
