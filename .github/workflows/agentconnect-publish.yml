@@ -6,7 +6,7 @@ on:
       - 'agentconnect-v*'
   pull_request:
     branches:
-      - 'agentconnect/rebase-v*'
+      - 'agentconnect/upstream-v*'
 
 permissions: {}
 
